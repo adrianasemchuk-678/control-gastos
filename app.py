@@ -347,6 +347,9 @@ pagos_vencidos = [p for p in estados_pagos if p["estado"] == "vencido"]
 if pagos_vencidos:
     st.error(f"🚨 **¡Atención! Hay {len(pagos_vencidos)} pago(s) que ya vencieron este mes y todavía no figuran como pagados.** Mirá la lista abajo:")
 
+if not estados_pagos:
+    st.info("💡 Todavía no registraste ningún pago fijo. Hacé clic abajo en **'¿Querés agregar otro pago fijo para que te recuerde todos los meses?'** para cargar el primero (ej: Alquiler, Luz, Internet o Netflix).")
+
 for pago in estados_pagos:
     p_id = pago["id"]
     nombre = pago["nombre"]
@@ -356,7 +359,7 @@ for pago in estados_pagos:
     icono = pago["icono"]
     estado = pago["estado"]
 
-    col_box, col_accion = st.columns([3.8, 1.2])
+    col_box, col_accion = st.columns([3.5, 1.5])
 
     with col_box:
         if estado == "pagado":
@@ -411,12 +414,109 @@ for pago in estados_pagos:
     with col_accion:
         st.write("")
         if not pago["pagado"]:
-            if st.button(f"✅ Ya lo pagué", key=f"btn_pagar_{p_id}", type="primary", use_container_width=True):
+            if st.button("✅ Ya lo pagué", key=f"btn_pagar_{p_id}", type="primary", use_container_width=True):
                 db.marcar_pago_fijo_como_pagado(p_id, hoy.month, anio_actual)
                 st.success(f"¡Genial! Anotamos el pago de {nombre} por {fmt_pesos(monto)}.")
                 st.rerun()
         else:
-            st.markdown("<div style='color: #16a34a; font-weight: 800; text-align: center; padding-top: 10px;'>✔️ Al día</div>", unsafe_allow_html=True)
+            st.markdown("<div style='color: #16a34a; font-weight: 800; text-align: center; padding: 4px 0; font-size: 1.05rem;'>✔️ Al día</div>", unsafe_allow_html=True)
+
+        col_ed, col_el = st.columns(2)
+        with col_ed:
+            if st.button("✏️ Editar", key=f"btn_edit_{p_id}", type="secondary", use_container_width=True):
+                st.session_state[f"editando_pf_{p_id}"] = not st.session_state.get(f"editando_pf_{p_id}", False)
+                st.session_state[f"borrando_pf_{p_id}"] = False
+                st.rerun()
+        with col_el:
+            if st.button("🗑️ Eliminar", key=f"btn_elim_{p_id}", type="secondary", use_container_width=True):
+                st.session_state[f"borrando_pf_{p_id}"] = not st.session_state.get(f"borrando_pf_{p_id}", False)
+                st.session_state[f"editando_pf_{p_id}"] = False
+                st.rerun()
+
+    # Formulario desplegable para EDITAR
+    if st.session_state.get(f"editando_pf_{p_id}", False):
+        st.markdown(f"""
+        <div style="background: #ffffff; border: 2px solid #f472b6; border-radius: 18px; padding: 18px 22px; margin-top: -6px; margin-bottom: 16px; box-shadow: 0 4px 14px rgba(244, 114, 182, 0.12);">
+            <div style="font-weight: 800; font-size: 1.1rem; color: #be123c; margin-bottom: 10px;">
+                ✏️ Modificar pago fijo: <span style="color: #4a2d3b;">{nombre}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        with st.form(key=f"form_editar_pf_{p_id}"):
+            col_ed1, col_ed2, col_ed3 = st.columns([3, 2, 2])
+            with col_ed1:
+                edit_nombre = st.text_input("Concepto / Nombre del pago:", value=nombre, key=f"input_nom_{p_id}")
+            with col_ed2:
+                edit_monto = st.number_input("Monto ($):", min_value=0.0, value=float(monto), step=1000.0, format="%.2f", key=f"input_mto_{p_id}")
+            with col_ed3:
+                cats = cat.get_categories_list()
+                cat_actual = pago.get("categoria", "🏠 Alquiler & Hogar")
+                idx_cat = cats.index(cat_actual) if cat_actual in cats else 0
+                edit_cat = st.selectbox("Categoría:", options=cats, index=idx_cat, key=f"input_cat_{p_id}")
+
+            col_dd1, col_dd2 = st.columns(2)
+            with col_dd1:
+                edit_dia_desde = st.number_input("Día desde que se puede pagar:", min_value=1, max_value=31, value=int(d_desde), key=f"input_dd_{p_id}")
+            with col_dd2:
+                edit_dia_hasta = st.number_input("Día de vencimiento límite (hasta qué día):", min_value=1, max_value=31, value=int(d_hasta), key=f"input_dh_{p_id}")
+
+            col_sub_g, col_sub_c = st.columns(2)
+            with col_sub_g:
+                btn_guardar_edit = st.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True)
+            with col_sub_c:
+                btn_cancel_edit = st.form_submit_button("❌ Cancelar", type="secondary", use_container_width=True)
+
+            if btn_guardar_edit:
+                if not edit_nombre.strip():
+                    st.error("⚠️ El concepto o nombre no puede estar vacío.")
+                elif edit_monto <= 0:
+                    st.error("⚠️ El monto debe ser mayor a cero.")
+                elif edit_dia_desde > edit_dia_hasta:
+                    st.error("⚠️ El día de inicio no puede ser mayor al día de vencimiento.")
+                else:
+                    nuevo_ico = cat.get_category_icon(edit_cat)
+                    db.update_pago_fijo(
+                        pago_fijo_id=p_id,
+                        nombre=edit_nombre.strip(),
+                        monto=edit_monto,
+                        categoria=edit_cat,
+                        icono=nuevo_ico,
+                        dia_desde=edit_dia_desde,
+                        dia_hasta=edit_dia_hasta
+                    )
+                    st.session_state[f"editando_pf_{p_id}"] = False
+                    st.success(f"¡Pago fijo '{edit_nombre.strip()}' actualizado correctamente! 🌸")
+                    st.rerun()
+
+            if btn_cancel_edit:
+                st.session_state[f"editando_pf_{p_id}"] = False
+                st.rerun()
+
+    # Confirmación de BORRADO
+    if st.session_state.get(f"borrando_pf_{p_id}", False):
+        st.markdown(f"""
+        <div style="background: #fff1f2; border: 2px solid #fb7185; border-radius: 18px; padding: 18px 22px; margin-top: -6px; margin-bottom: 16px;">
+            <div style="font-weight: 800; font-size: 1.1rem; color: #9f1239; margin-bottom: 6px;">
+                🗑️ ¿Confirmás que querés eliminar '{nombre}'?
+            </div>
+            <p style="color: #4c0519; margin-bottom: 12px; font-size: 0.95rem;">
+                Si ya no tenés este gasto fijo, se borrará y ya no te avisará en los próximos meses.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_b_si, col_b_no = st.columns(2)
+        with col_b_si:
+            if st.button("🗑️ Sí, eliminar definitivamente", key=f"btn_conf_del_{p_id}", type="primary", use_container_width=True):
+                db.delete_pago_fijo(p_id)
+                st.session_state[f"borrando_pf_{p_id}"] = False
+                st.success(f"¡Pago fijo '{nombre}' eliminado! 🌸")
+                st.rerun()
+        with col_b_no:
+            if st.button("✖️ Cancelar, mantenerlo", key=f"btn_canc_del_{p_id}", type="secondary", use_container_width=True):
+                st.session_state[f"borrando_pf_{p_id}"] = False
+                st.rerun()
 
 # Formulario para agregar otro pago fijo
 with st.expander("➕ ¿Querés agregar otro pago fijo para que te recuerde todos los meses?"):

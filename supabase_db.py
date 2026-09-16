@@ -297,3 +297,81 @@ def sb_seed_demo_data(usuario_id: int, mes: int, anio: int):
         client.table("gastos").insert(demo_items).execute()
     except Exception as e:
         print(f"Error sb_seed_demo_data: {e}")
+
+
+# ----------------- PAGOS FIJOS EN SUPABASE -----------------
+
+def sb_add_pago_fijo(nombre: str, monto: float, categoria: str, icono: str, dia_desde: int, dia_hasta: int, usuario_id: int = 1) -> int:
+    """Registra un nuevo pago fijo en Supabase."""
+    client = get_supabase_client()
+    if not client:
+        return 0
+    try:
+        data = {
+            "usuario_id": int(usuario_id),
+            "nombre": nombre.strip(),
+            "monto": float(monto),
+            "categoria": categoria,
+            "icono": icono,
+            "dia_desde": int(dia_desde),
+            "dia_hasta": int(dia_hasta),
+            "activo": 1
+        }
+        res = client.table("pagos_fijos").insert(data).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]["id"]
+        return 0
+    except Exception as e:
+        print(f"Error sb_add_pago_fijo: {e}")
+        return 0
+
+
+def sb_get_pagos_fijos(usuario_id: int = 1) -> List[Dict[str, Any]]:
+    """Obtiene los pagos fijos activos desde Supabase."""
+    client = get_supabase_client()
+    if not client:
+        return []
+    try:
+        res = client.table("pagos_fijos").select("*").eq("usuario_id", int(usuario_id)).eq("activo", 1).order("dia_hasta").execute()
+        return res.data or []
+    except Exception as e:
+        print(f"Error sb_get_pagos_fijos: {e}")
+        return []
+
+
+def sb_update_pago_fijo(pago_fijo_id: int, nombre: str, monto: float, categoria: str, icono: str, dia_desde: int, dia_hasta: int) -> bool:
+    """Actualiza un pago fijo existente en Supabase."""
+    client = get_supabase_client()
+    if not client:
+        return False
+    try:
+        res = client.table("pagos_fijos").update({
+            "nombre": nombre.strip(),
+            "monto": float(monto),
+            "categoria": categoria,
+            "icono": icono,
+            "dia_desde": int(dia_desde),
+            "dia_hasta": int(dia_hasta)
+        }).eq("id", int(pago_fijo_id)).execute()
+        return bool(res.data)
+    except Exception as e:
+        print(f"Error sb_update_pago_fijo: {e}")
+        return False
+
+
+def sb_delete_pago_fijo(pago_fijo_id: int) -> bool:
+    """Elimina un pago fijo y su historial en Supabase."""
+    client = get_supabase_client()
+    if not client:
+        return False
+    try:
+        client.table("pagos_fijos").delete().eq("id", int(pago_fijo_id)).execute()
+        try:
+            client.table("pagos_fijos_historial").delete().eq("pago_fijo_id", int(pago_fijo_id)).execute()
+        except Exception:
+            pass
+        return True
+    except Exception as e:
+        print(f"Error sb_delete_pago_fijo: {e}")
+        return False
+
