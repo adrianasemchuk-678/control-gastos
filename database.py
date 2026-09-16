@@ -229,7 +229,17 @@ def clear_expenses():
 # ----------------- PAGOS FIJOS MENSUALES Y VENCIMIENTOS -----------------
 
 def get_pagos_fijos() -> List[Dict[str, Any]]:
-    """Retorna todos los pagos fijos registrados."""
+    """Retorna todos los pagos fijos registrados (desde Supabase si está activa, o SQLite local)."""
+    if is_cloud_active():
+        try:
+            client = sdb.get_supabase_client()
+            if client:
+                res = client.table("pagos_fijos").select("*").eq("activo", 1).order("dia_hasta").execute()
+                if res.data is not None and len(res.data) > 0:
+                    return res.data
+        except Exception as e:
+            print(f"Error consultando pagos fijos en Supabase: {e}")
+
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, nombre, monto, categoria, icono, dia_desde, dia_hasta, activo FROM pagos_fijos WHERE activo = 1 ORDER BY dia_hasta ASC")
@@ -238,6 +248,16 @@ def get_pagos_fijos() -> List[Dict[str, Any]]:
 
 def get_pago_fijo_by_id(pago_fijo_id: int) -> Optional[Dict[str, Any]]:
     """Obtiene los datos de un pago fijo específico por su ID."""
+    if is_cloud_active():
+        try:
+            client = sdb.get_supabase_client()
+            if client:
+                res = client.table("pagos_fijos").select("id, nombre, monto, categoria, icono, dia_desde, dia_hasta, activo").eq("id", int(pago_fijo_id)).execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+        except Exception as e:
+            print(f"Error obteniendo pago fijo de Supabase: {e}")
+
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, nombre, monto, categoria, icono, dia_desde, dia_hasta FROM pagos_fijos WHERE id = ?", (int(pago_fijo_id),))
@@ -245,8 +265,27 @@ def get_pago_fijo_by_id(pago_fijo_id: int) -> Optional[Dict[str, Any]]:
         return dict(row) if row else None
 
 
-def add_pago_fijo(nombre: str, monto: float, categoria: str, icono: str, dia_desde: int, dia_hasta: int) -> int:
-    """Crea un nuevo pago fijo recurrente mensual."""
+def add_pago_fijo(nombre: str, monto: float, categoria: str, icono: str, dia_desde: int = 1, dia_hasta: int = 10) -> int:
+    """Crea un nuevo pago fijo recurrente mensual en SQLite y Supabase."""
+    cloud_id = None
+    if is_cloud_active():
+        try:
+            client = sdb.get_supabase_client()
+            if client:
+                res = client.table("pagos_fijos").insert({
+                    "nombre": nombre.strip(),
+                    "monto": float(monto),
+                    "categoria": categoria,
+                    "icono": icono,
+                    "dia_desde": int(dia_desde),
+                    "dia_hasta": int(dia_hasta),
+                    "activo": 1
+                }).execute()
+                if res.data and len(res.data) > 0:
+                    cloud_id = res.data[0].get("id")
+        except Exception as e:
+            print(f"Error agregando pago fijo en Supabase: {e}")
+
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -254,30 +293,81 @@ def add_pago_fijo(nombre: str, monto: float, categoria: str, icono: str, dia_des
             VALUES (?, ?, ?, ?, ?, ?)
         """, (nombre.strip(), float(monto), categoria, icono, int(dia_desde), int(dia_hasta)))
         conn.commit()
-        return cursor.lastrowid
+        return cloud_id or cursor.lastrowid
 
 
-def update_pago_fijo(pago_fijo_id: int, nombre: str, monto: float, categoria: str, icono: str, dia_desde: int, dia_hasta: int) -> bool:
-    """Modifica los datos de un pago fijo ya existente."""
+def update_pago_fijo(
+    pago_fijo_id: int,
+    nombre: str,
+    monto: float,
+    categoria: Optional[str] = None,
+    icono: Optional[str] = None,
+    dia_desde: Optional[int] = None,
+    dia_hasta: Optional[int] = None
+) -> bool:
+    """
+    Modifica los datos de un pago fijo existente en SQLite y Supabase.
+    Permite actualizar concepto/nombre, monto, categoría, ícono y días de vencimiento.
+    """
+    pago_actual = get_pago_fijo_by_id(pago_fijo_id)
+    cat_val = categoria if categoria is not None else (pago_actual.get("categoria", "🏠 Alquiler & Hogar") if pago_actual else "🏠 Alquiler & Hogar")
+    ico_val = icono if icono is not None else (pago_actual.get("icono", "🏠") if pago_actual else "🏠")
+    d_desde_val = int(dia_desde) if dia_desde is not None else (pago_actual.get("dia_desde", 1) if pago_actual else 1)
+    d_hasta_val = int(dia_hasta) if dia_hasta is not None else (pago_actual.get("dia_hasta", 10) if pago_actual else 10)
+
+    # 1. Actualizar en Supabase si la nube está activa
+    if is_cloud_active():
+        try:
+            client = sdb.get_supabase_client()
+            if client:
+                client.table("pagos_fijos").update({
+                    "nombre": nombre.strip(),
+                    "monto": float(monto),
+                    "categoria": cat_val,
+                    "icono": ico_val,
+                    "dia_desde": d_desde_val,
+                    "dia_hasta": d_hasta_val
+                }).eq("id", int(pago_fijo_id)).execute()
+        except Exception as e:
+            print(f"Error actualizando pago fijo en Supabase: {e}")
+
+    # 2. Actualizar en SQLite local
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE pagos_fijos 
             SET nombre = ?, monto = ?, categoria = ?, icono = ?, dia_desde = ?, dia_hasta = ?
             WHERE id = ?
-        """, (nombre.strip(), float(monto), categoria, icono, int(dia_desde), int(dia_hasta), int(pago_fijo_id)))
+        """, (nombre.strip(), float(monto), cat_val, ico_val, d_desde_val, d_hasta_val, int(pago_fijo_id)))
         conn.commit()
         return cursor.rowcount > 0
 
 
 def delete_pago_fijo(pago_fijo_id: int) -> bool:
-    """Elimina un pago fijo."""
+    """
+    Elimina un pago fijo tanto en SQLite local como en Supabase en la nube.
+    """
+    # 1. Borrar en Supabase
+    if is_cloud_active():
+        try:
+            client = sdb.get_supabase_client()
+            if client:
+                client.table("pagos_fijos").delete().eq("id", int(pago_fijo_id)).execute()
+                try:
+                    client.table("pagos_fijos_historial").delete().eq("pago_fijo_id", int(pago_fijo_id)).execute()
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"Error eliminando pago fijo en Supabase: {e}")
+
+    # 2. Borrar en SQLite local
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM pagos_fijos WHERE id = ?", (int(pago_fijo_id),))
+        deleted_count = cursor.rowcount
         cursor.execute("DELETE FROM pagos_fijos_historial WHERE pago_fijo_id = ?", (int(pago_fijo_id),))
         conn.commit()
-        return cursor.rowcount > 0
+        return deleted_count > 0
 
 
 def get_estado_pagos_fijos(mes: int, anio: int) -> List[Dict[str, Any]]:
@@ -286,16 +376,29 @@ def get_estado_pagos_fijos(mes: int, anio: int) -> List[Dict[str, Any]]:
     hoy = date.today()
     dia_actual = hoy.day if (hoy.month == mes and hoy.year == anio) else 15
 
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT pago_fijo_id, fecha_pago, monto FROM pagos_fijos_historial WHERE mes = ? AND anio = ?", (mes, anio))
-        historial_mes = {row["pago_fijo_id"]: dict(row) for row in cursor.fetchall()}
+    historial_mes = {}
+    if is_cloud_active():
+        try:
+            client = sdb.get_supabase_client()
+            if client:
+                res = client.table("pagos_fijos_historial").select("pago_fijo_id, fecha_pago, monto").eq("mes", int(mes)).eq("anio", int(anio)).execute()
+                if res.data:
+                    historial_mes = {row["pago_fijo_id"]: row for row in res.data}
+        except Exception as e:
+            print(f"Error get_estado_pagos_fijos Supabase: {e}")
+
+    # Si no hay historial en la nube o no está activa, consultar SQLite local
+    if not historial_mes:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT pago_fijo_id, fecha_pago, monto FROM pagos_fijos_historial WHERE mes = ? AND anio = ?", (mes, anio))
+            historial_mes = {row["pago_fijo_id"]: dict(row) for row in cursor.fetchall()}
 
     resultado = []
     for p in pagos:
         p_id = p["id"]
-        dia_desde = p["dia_desde"]
-        dia_hasta = p["dia_hasta"]
+        dia_desde = p.get("dia_desde", 1)
+        dia_hasta = p.get("dia_hasta", 10)
         
         item = dict(p)
         if p_id in historial_mes:
@@ -325,33 +428,60 @@ def marcar_pago_fijo_como_pagado(pago_fijo_id: int, mes: int, anio: int, fecha_p
     if not fecha_pago:
         fecha_pago = date.today().strftime("%Y-%m-%d")
 
+    pago = get_pago_fijo_by_id(pago_fijo_id)
+    if not pago:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM pagos_fijos WHERE id = ?", (int(pago_fijo_id),))
+            p_row = cursor.fetchone()
+            if p_row:
+                pago = dict(p_row)
+
+    if not pago:
+        return
+
+    monto = float(pago["monto"])
+    nombre = pago["nombre"]
+    categoria = pago["categoria"]
+    icono = pago["icono"]
+
+    # Registrar en Supabase si está activa
+    if is_cloud_active():
+        try:
+            client = sdb.get_supabase_client()
+            if client:
+                client.table("pagos_fijos_historial").upsert({
+                    "pago_fijo_id": int(pago_fijo_id),
+                    "mes": int(mes),
+                    "anio": int(anio),
+                    "fecha_pago": fecha_pago,
+                    "monto": monto
+                }).execute()
+        except Exception as e:
+            print(f"Error marcar_pago_fijo_como_pagado Supabase: {e}")
+
+    # Registrar en SQLite local
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM pagos_fijos WHERE id = ?", (int(pago_fijo_id),))
-        pago = cursor.fetchone()
-        if not pago:
-            return
-
-        pago_dict = dict(pago)
-
         cursor.execute("""
             INSERT OR REPLACE INTO pagos_fijos_historial (pago_fijo_id, mes, anio, fecha_pago, monto)
             VALUES (?, ?, ?, ?, ?)
-        """, (int(pago_fijo_id), int(mes), int(anio), fecha_pago, pago_dict["monto"]))
+        """, (int(pago_fijo_id), int(mes), int(anio), fecha_pago, monto))
         conn.commit()
 
-    desc = f"Pago fijo: {pago_dict['nombre']}"
+    # Añadir a la lista de gastos diarios para que compute en el balance
+    desc = f"Pago fijo: {nombre}"
     add_expense(
         fecha=fecha_pago,
         descripcion=desc,
-        categoria=pago_dict["categoria"],
-        icono=pago_dict["icono"],
-        monto=pago_dict["monto"]
+        categoria=categoria,
+        icono=icono,
+        monto=monto
     )
 
 
 def migrate_local_to_cloud() -> Tuple[bool, str]:
-    """Copia los gastos locales a Supabase."""
+    """Copia los gastos y pagos fijos locales a Supabase."""
     client = sdb.get_supabase_client()
     if not client:
         return False, "Supabase no está conectado."
@@ -359,6 +489,7 @@ def migrate_local_to_cloud() -> Tuple[bool, str]:
     try:
         with get_connection() as conn:
             cur = conn.cursor()
+            # 1. Gastos
             cur.execute("SELECT fecha, descripcion, categoria, icono, monto FROM gastos")
             gastos_locales = [dict(r) for r in cur.fetchall()]
             for g in gastos_locales:
@@ -366,6 +497,17 @@ def migrate_local_to_cloud() -> Tuple[bool, str]:
             if gastos_locales:
                 client.table("gastos").insert(gastos_locales).execute()
 
-        return True, f"Migración lista: {len(gastos_locales)} gastos subidos a la nube."
+            # 2. Pagos Fijos
+            cur.execute("SELECT nombre, monto, categoria, icono, dia_desde, dia_hasta, activo FROM pagos_fijos")
+            pagos_locales = [dict(r) for r in cur.fetchall()]
+            for p in pagos_locales:
+                p["usuario_id"] = 1
+            if pagos_locales:
+                try:
+                    client.table("pagos_fijos").insert(pagos_locales).execute()
+                except Exception as e:
+                    print(f"Error migrando pagos fijos: {e}")
+
+        return True, f"Migración lista: {len(gastos_locales)} gastos y {len(pagos_locales)} pagos fijos sincronizados con la nube."
     except Exception as e:
         return False, f"Error durante la migración: {e}"
