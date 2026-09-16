@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date
 import database as db
 import categories as cat
+import excel_generator as eg
 
 # Configuración inicial de la página
 st.set_page_config(
@@ -722,11 +723,21 @@ if not df_gastos.empty:
     
     st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
 
-    col_csv, col_del = st.columns([1, 1.5])
+    col_excel, col_csv, col_del = st.columns([1.6, 1.1, 1.3])
+    with col_excel:
+        excel_bytes = eg.generar_excel_control(mes=hoy.month, anio=anio_actual, sueldo=sueldo_guardado)
+        st.download_button(
+            label="📊 Descargar Control en Excel (.xlsx)",
+            data=excel_bytes,
+            file_name=f"Control_Gastos_{mes_nombre_actual}_{anio_actual}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            use_container_width=True
+        )
     with col_csv:
         csv_bytes = df_gastos[["fecha", "descripcion", "categoria", "monto"]].to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="📥 Guardar lista en Excel (CSV)",
+            label="📥 Lista simple (CSV)",
             data=csv_bytes,
             file_name=f"mis_cuentas_{mes_nombre_actual}_{anio_actual}.csv",
             mime="text/csv",
@@ -734,16 +745,35 @@ if not df_gastos.empty:
             use_container_width=True
         )
     with col_del:
-        with st.expander("❌ ¿Te equivocaste al anotar algo? Hacé clic acá para borrarlo"):
+        with st.expander("❌ ¿Te equivocaste al anotar algo?"):
             opciones_para_borrar = {
                 f"{row['fecha']} - {row['icono']} {row['descripcion']} ({fmt_pesos(row['monto'])})": row['id']
                 for _, row in df_gastos.iterrows()
             }
             elegido = st.selectbox("Elegí el gasto que querés borrar:", options=list(opciones_para_borrar.keys()))
-            if st.button("🗑️ Sí, borrar este gasto", type="secondary"):
+            if st.button("🗑️ Sí, borrar este gasto", type="secondary", use_container_width=True):
                 id_borrar = opciones_para_borrar[elegido]
                 db.delete_expense(id_borrar)
                 st.success("¡Gasto borrado con éxito!")
                 st.rerun()
+
+    st.markdown("""
+    <div style="background: #ffffff; border: 1.5px solid #fbcfe8; border-radius: 14px; padding: 12px 18px; margin-top: 14px; font-size: 0.92rem; color: #475569;">
+        ✨ <strong>¿Qué incluye tu archivo de Excel (.xlsx)?</strong>
+        <ul style="margin: 6px 0 0 0; padding-left: 20px;">
+            <li><strong>📊 Panel de Control:</strong> Tarjetas visuales de Dinero Inicial, Gastos Totales y Saldo Restante vinculadas con fórmulas automáticas.</li>
+            <li><strong>📈 Distribución por Categoría & Gráfico Nativo:</strong> Tabla resumen con porcentajes calculados automáticamente y gráfico circular de torta incorporado.</li>
+            <li><strong>📝 Detalle de Gastos & Pagos Fijos:</strong> Pestañas dedicadas con filtros interactivos de Excel y semáforo visual de vencimientos.</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
 else:
-    st.caption("Aún no hay gastos registrados.")
+    st.caption("Aún no hay gastos registrados este mes.")
+    excel_bytes = eg.generar_excel_control(mes=hoy.month, anio=anio_actual, sueldo=sueldo_guardado)
+    st.download_button(
+        label="📊 Descargar Plantilla de Control en Excel (.xlsx)",
+        data=excel_bytes,
+        file_name=f"Control_Gastos_{mes_nombre_actual}_{anio_actual}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type="secondary"
+    )
