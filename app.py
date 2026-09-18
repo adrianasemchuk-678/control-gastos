@@ -13,7 +13,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# CONFIGURACIÓN DE PÁGINA: Forzamos barra lateral visible (expanded)
+# CONFIGURACIÓN DE PÁGINA
 st.set_page_config(
     page_title="Control de Gastos AS",
     page_icon="🌸",
@@ -21,7 +21,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- BLOQUEAR TRADUCTOR AUTOMÁTICO Y FORZAR VISTA ESCRITORIO EN MÓVIL ---
+# --- BLOQUEAR TRADUCTOR AUTOMÁTICO Y APLICAR ESTILOS ---
 st.markdown("""
     <script>
         document.documentElement.setAttribute('lang', 'es');
@@ -32,7 +32,6 @@ st.markdown("""
     .main { background-color: #FAFAFA; }
     .stButton>button { background-color: #FFB6C1; color: black; border-radius: 10px; font-weight: bold; }
     
-    /* Adaptación para forzar visualización de escritorio amplia en pantallas pequeñas */
     @media (max-width: 768px) {
         .main .block-container {
             padding-left: 1rem !important;
@@ -180,7 +179,7 @@ st.sidebar.title(f"👤 {usr_actual.capitalize()}")
 if es_admin:
     st.sidebar.caption("👑 Administradora")
 
-opciones = ["💰 Mi Presupuesto & Panel", "📌 Pagos Fijos", "🛒 Gastos Diarios", "⚙️ Mis Preferencias", "📊 Reportes & Exportaciones"]
+opciones = ["💰 Mi Presupuesto & Panel", "📌 Pagos Fijos", "🛒 Gastos Diarios", "⚙️ Mis Preferencias", "📊 Reportes & Resumen de Gastos"]
 if es_admin:
     opciones.append("👥 Gestión de Usuarios")
 
@@ -419,37 +418,62 @@ elif opcion == "⚙️ Mis Preferencias":
         guardar_json(DATA_FILE, db_data)
         st.success("Preferencias guardadas correctamente.")
 
-# --- SECCIÓN 5: REPORTES Y EXPORTACIONES ---
-elif opcion == "📊 Reportes & Exportaciones":
-    st.header(f"📊 Reportes Financieros — {nombre_mes_actual}")
+# --- SECCIÓN 5: REPORTES Y RESUMEN DE GASTOS ---
+elif opcion == "📊 Reportes & Resumen de Gastos":
+    st.header(f"📊 Reportes & Resumen de Gastos — {nombre_mes_actual}")
     
     target_user = usr_actual
     if es_admin:
         lista_usr = ["Todos"] + list(usuarios.keys())
-        sel = st.selectbox("Ver información de:", lista_usr)
+        sel = st.selectbox("Ver reporte de:", lista_usr)
         if sel != "Todos":
             target_user = sel
 
+    # CÁLCULO DEL RESUMEN EJECUTIVO EN PANTALLA
     if es_admin and sel == "Todos":
+        tot_ing_rep = sum(ud.get("ingreso_inicial", 0.0) + sum(ie["monto"] for ie in ud.get("ingresos_extras", [])) for ud in db_data.values())
+        tot_alc_rep = sum(ud.get("alcancia", 0.0) for ud in db_data.values())
         gastos_totales_lista = []
         for u, udata in db_data.items():
             for g in udata.get("gastos_diarios", []):
                 gastos_totales_lista.append({**g, "usuario": u})
             for pf in udata.get("pagos_fijos", []):
-                if pf["pagado"]:
+                if pf.get("pagado", False):
                     gastos_totales_lista.append({"fecha": "Pago Fijo", "categoria": pf["concepto"], "monto": pf["monto"], "usuario": u})
     else:
         udata = db_data.get(target_user, {})
+        tot_ing_rep = udata.get("ingreso_inicial", 0.0) + sum(ie["monto"] for ie in udata.get("ingresos_extras", []))
+        tot_alc_rep = udata.get("alcancia", 0.0)
         gastos_totales_lista = list(udata.get("gastos_diarios", []))
         for pf in udata.get("pagos_fijos", []):
-            if pf["pagado"]:
+            if pf.get("pagado", False):
                 gastos_totales_lista.append({"fecha": "Pago Fijo", "categoria": pf["concepto"], "monto": pf["monto"]})
+
+    tot_gastos_rep = sum(item["monto"] for item in gastos_totales_lista)
+    saldo_restante_rep = tot_ing_rep - tot_gastos_rep
+
+    # TARJETA RESUMEN EJECUTIVO
+    st.subheader("📋 Resumen Financiero del Mes")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("💰 Ingreso Total", fmt_moneda(tot_ing_rep))
+    m2.metric("💸 Total Gastado", fmt_moneda(tot_gastos_rep))
+    
+    if saldo_restante_rep >= 0:
+        m3.metric("🟢 Saldo Disponible", fmt_moneda(saldo_restante_rep))
+    else:
+        m3.metric("🔴 Saldo Negativo (En contra)", fmt_moneda(saldo_restante_rep))
+        
+    m4.metric("🐷 Alcancía de Ahorros", fmt_moneda(tot_alc_rep))
+
+    if saldo_restante_rep < 0:
+        st.error(f"⚠️ **Alerta:** Los gastos superan los ingresos acumulados por un total de {fmt_moneda(abs(saldo_restante_rep))}.")
+
+    st.divider()
 
     if gastos_totales_lista:
         df_rep = pd.DataFrame(gastos_totales_lista)
-        st.metric("Total Acumulado Gastado", fmt_moneda(df_rep["monto"].sum()))
         
-        st.subheader("📌 Desglose en Pantalla")
+        st.subheader("📌 Desglose Detallado de Movimientos")
         df_rep_display = df_rep.copy()
         df_rep_display["Monto"] = df_rep_display["monto"].apply(fmt_moneda)
         st.dataframe(df_rep_display.drop(columns=["monto"]), use_container_width=True)
@@ -478,7 +502,9 @@ elif opcion == "📊 Reportes & Exportaciones":
             
             data_res = [
                 ["Usuario", target_user.capitalize()],
-                ["Total Gastado", fmt_moneda(df_rep["monto"].sum())]
+                ["Ingreso Total", fmt_moneda(tot_ing_rep)],
+                ["Total Gastado", fmt_moneda(tot_gastos_rep)],
+                ["Saldo Restante", fmt_moneda(saldo_restante_rep)]
             ]
             t_res = Table(data_res, colWidths=[150, 250])
             t_res.setStyle(TableStyle([
@@ -538,7 +564,7 @@ elif opcion == "📊 Reportes & Exportaciones":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.info("No hay información suficiente registrada este mes para exportar.")
+        st.info("No hay gastos suficientes registrados este mes para mostrar gráficos.")
 
 # --- SECCIÓN 6: GESTIÓN DE USUARIOS (ADMINISTRADORA) ---
 elif opcion == "👥 Gestión de Usuarios" and es_admin:

@@ -6,7 +6,7 @@
                 "concepto": "🏋️‍♀️ Gym",
                 "monto": 40000.0,
                 "vencimiento": "10",
-                "pagado": false
+                "pagado": true
             },
             {
                 "concepto": "🎾 Padel profe",
@@ -43,7 +43,50 @@
         "nombre_meta": "Ahorro General",
         "usar_presupuestos": false,
         "presupuestos_cat": {},
-        "pagos_fijos": [],
+        "pagos_fijos": [
+            {
+                "concepto": "📦 Alquiler luz y agua ",
+                "monto": 380000.0,
+                "vencimiento": "15",
+                "pagado": true
+            },
+            {
+                "concepto": "📦 Internet ",
+                "monto": 10000.0,
+                "vencimiento": "20",
+                "pagado": true
+            },
+            {
+                "concepto": "📦 Seguro",
+                "monto": 27000.0,
+                "vencimiento": "15",
+                "pagado": true
+            },
+            {
+                "concepto": "📦 Crossfit",
+                "monto": 40000.0,
+                "vencimiento": "27",
+                "pagado": true
+            },
+            {
+                "concepto": "📦 Daniela ",
+                "monto": 200000.0,
+                "vencimiento": "15",
+                "pagado": true
+            },
+            {
+                "concepto": "📦 Paula",
+                "monto": 150000.0,
+                "vencimiento": "15",
+                "pagado": true
+            },
+            {
+                "concepto": "⛽ Nafta ",
+                "monto": 40000.0,
+                "vencimiento": "20",
+                "pagado": true
+            }
+        ],
         "gastos_diarios": []
     }
 }
