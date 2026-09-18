@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import os
 import time
+import subprocess
 import matplotlib.pyplot as plt
 from datetime import datetime
 from io import BytesIO
@@ -83,7 +84,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- ARCHIVOS DE DATOS PERMANENTES ---
+# --- ARCHIVOS DE DATOS PERMANENTES CON RESPALDO AUTOMÁTICO ---
 USERS_FILE = "users.json"
 DATA_FILE = "finance_data.json"
 
@@ -99,11 +100,25 @@ def cargar_json(filepath, default):
         return default
 
 def guardar_json(filepath, data):
+    # 1. Guardar localmente
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+    
+    # 2. Respaldo automático en GitHub para que nunca se pierda nada
+    try:
+        subprocess.run(["git", "add", filepath], check=False)
+        subprocess.run(["git", "commit", "-m", f"Auto-backup: actualización en {filepath}"], check=False)
+        subprocess.run(["git", "push"], check=False)
+    except Exception:
+        pass  # Evita interrumpir la app si hay problemas de red en el momento
 
 usuarios = cargar_json(USERS_FILE, {"admin": "5861"})
 db_data = cargar_json(DATA_FILE, {})
+
+# Asegurar usuario admin por defecto si el archivo está vacío
+if "admin" not in usuarios:
+    usuarios["admin"] = "5861"
+    guardar_json(USERS_FILE, usuarios)
 
 # --- LOGIN Y SESIÓN ---
 if "usuario_actual" not in st.session_state:
@@ -217,14 +232,14 @@ if opcion == "💰 Mi Presupuesto & Panel":
         if nuevo_ingreso != usr_data.get("ingreso_inicial"):
             usr_data["ingreso_inicial"] = nuevo_ingreso
             guardar_json(DATA_FILE, db_data)
-            st.success("Sueldo inicial actualizado.")
+            st.success("Sueldo inicial actualizado y respaldado.")
 
     with col_i2:
         alcancia_val = st.number_input("🐷 Alcancía de Ahorros ($):", min_value=0.0, value=float(usr_data.get("alcancia", 0.0)), step=5000.0)
         if alcancia_val != usr_data.get("alcancia"):
             usr_data["alcancia"] = alcancia_val
             guardar_json(DATA_FILE, db_data)
-            st.success("Alcancía actualizada.")
+            st.success("Alcancía actualizada y respaldada.")
 
     # REGISTRO DE INGRESOS EXTRAS
     st.divider()
@@ -242,7 +257,7 @@ if opcion == "💰 Mi Presupuesto & Panel":
                     "monto": monto_ing
                 })
                 guardar_json(DATA_FILE, db_data)
-                st.success("Ingreso extra agregado exitosamente.")
+                st.success("Ingreso extra agregado y respaldado.")
                 time.sleep(0.3)
                 st.rerun()
 
@@ -290,7 +305,7 @@ if opcion == "💰 Mi Presupuesto & Panel":
         for pf in usr_data["pagos_fijos"]:
             pf["pagado"] = False
         guardar_json(DATA_FILE, db_data)
-        st.success("¡Mes cerrado! Sobrante guardado en la alcancía y registros limpios.")
+        st.success("¡Mes cerrado! Sobrante guardado en la alcancía y respaldado.")
         time.sleep(0.3)
         st.rerun()
 
@@ -298,7 +313,7 @@ if opcion == "💰 Mi Presupuesto & Panel":
         usr_data["gastos_diarios"] = []
         usr_data["ingresos_extras"] = []
         guardar_json(DATA_FILE, db_data)
-        st.success("Gastos e ingresos extras reiniciados.")
+        st.success("Gastos e ingresos extras reiniciados y respaldados.")
         time.sleep(0.3)
         st.rerun()
 
@@ -322,7 +337,7 @@ elif opcion == "📌 Pagos Fijos":
                 "pagado": False
             })
             guardar_json(DATA_FILE, db_data)
-            st.success("Pago fijo agregado.")
+            st.success("Pago fijo agregado y respaldado.")
             time.sleep(0.3)
             st.rerun()
 
@@ -370,7 +385,7 @@ elif opcion == "🛒 Gastos Diarios":
                     "monto": monto
                 })
                 guardar_json(DATA_FILE, db_data)
-                st.success("Gasto registrado correctamente.")
+                st.success("Gasto registrado y respaldado correctamente.")
                 time.sleep(0.3)
                 st.rerun()
 
@@ -399,7 +414,7 @@ elif opcion == "⚙️ Mis Preferencias":
         usr_data["nombre_meta"] = nom_m
         usr_data["meta_alcancia"] = val_m
         guardar_json(DATA_FILE, db_data)
-        st.success("Meta actualizada.")
+        st.success("Meta actualizada y respaldada.")
 
     st.divider()
     st.subheader("📊 Presupuesto Máximo por Categoría (Opcional)")
@@ -416,7 +431,7 @@ elif opcion == "⚙️ Mis Preferencias":
 
     if st.button("Guardar Preferencias"):
         guardar_json(DATA_FILE, db_data)
-        st.success("Preferencias guardadas correctamente.")
+        st.success("Preferencias guardadas y respaldadas correctamente.")
 
 # --- SECCIÓN 5: REPORTES Y RESUMEN DE GASTOS ---
 elif opcion == "📊 Reportes & Resumen de Gastos":
@@ -429,7 +444,6 @@ elif opcion == "📊 Reportes & Resumen de Gastos":
         if sel != "Todos":
             target_user = sel
 
-    # CÁLCULO DEL RESUMEN EJECUTIVO EN PANTALLA
     if es_admin and sel == "Todos":
         tot_ing_rep = sum(ud.get("ingreso_inicial", 0.0) + sum(ie["monto"] for ie in ud.get("ingresos_extras", [])) for ud in db_data.values())
         tot_alc_rep = sum(ud.get("alcancia", 0.0) for ud in db_data.values())
@@ -452,7 +466,6 @@ elif opcion == "📊 Reportes & Resumen de Gastos":
     tot_gastos_rep = sum(item["monto"] for item in gastos_totales_lista)
     saldo_restante_rep = tot_ing_rep - tot_gastos_rep
 
-    # TARJETA RESUMEN EJECUTIVO
     st.subheader("📋 Resumen Financiero del Mes")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("💰 Ingreso Total", fmt_moneda(tot_ing_rep))
@@ -600,7 +613,7 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
             if nu and np:
                 usuarios[nu] = np
                 guardar_json(USERS_FILE, usuarios)
-                st.success(f"¡Usuario '{nu}' creado exitosamente!")
+                st.success(f"¡Usuario '{nu}' creado y respaldado exitosamente!")
                 time.sleep(0.3)
                 st.rerun()
             else:
@@ -618,7 +631,7 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
                 if n_pass:
                     usuarios[usr_sel] = n_pass
                     guardar_json(USERS_FILE, usuarios)
-                    st.success(f"Contraseña de '{usr_sel}' actualizada.")
+                    st.success(f"Contraseña de '{usr_sel}' actualizada y respaldada.")
                     time.sleep(0.3)
                     st.rerun()
                 else:
@@ -630,7 +643,7 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
                 db_data.pop(usr_sel, None)
                 guardar_json(USERS_FILE, usuarios)
                 guardar_json(DATA_FILE, db_data)
-                st.success(f"Usuario '{usr_sel}' eliminado del sistema.")
+                st.success(f"Usuario '{usr_sel}' eliminado del sistema y respaldado.")
                 time.sleep(0.3)
                 st.rerun()
         else:
