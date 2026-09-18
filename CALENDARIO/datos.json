@@ -7,6 +7,7 @@
     },
     "eventos": [
         {
+            "id": 1,
             "usuario": "adriana",
             "titulo": "💅 Fabiana",
             "categoria": "💅 Estética / Belleza",
@@ -17,20 +18,7 @@
                 "2 horas antes",
                 "2 días antes"
             ],
-            "notas": "TURNO 19:30hs"
-        },
-        {
-            "usuario": "adriana",
-            "titulo": "💅 Fabiana",
-            "categoria": "💅 Estética / Belleza",
-            "fecha": "2026-10-01",
-            "hora": "19:30:00",
-            "alertas": [
-                "1 día antes",
-                "2 horas antes",
-                "2 días antes"
-            ],
-            "notas": "TURNO 19:30hs"
+            "notas": "19:30hs"
         }
     ]
 }
