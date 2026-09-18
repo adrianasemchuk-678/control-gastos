@@ -407,7 +407,7 @@ elif opcion == "📊 Reportes & Exportaciones":
     
     target_user = usr_actual
     if es_admin:
-        lista_usr = ["Todos"] + list(db_data.keys())
+        lista_usr = ["Todos"] + list(usuarios.keys())
         sel = st.selectbox("Ver información de:", lista_usr)
         if sel != "Todos":
             target_user = sel
@@ -487,7 +487,7 @@ elif opcion == "📊 Reportes & Exportaciones":
                 ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#FFB6C1")),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
                 ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)
             ]))
             elements.append(t_det)
@@ -526,10 +526,11 @@ elif opcion == "📊 Reportes & Exportaciones":
 elif opcion == "👥 Gestión de Usuarios" and es_admin:
     st.header("👑 Control y Administración Global de Usuarios")
     
-    st.subheader("📊 Tabla Resumen de Usuarios Registrados")
+    st.subheader("📊 Tabla Resumen de Todos los Usuarios")
     resumen_admin = []
-    for u, udata in db_data.items():
-        tot_f = sum(pf["monto"] for pf in udata.get("pagos_fijos", []) if pf["pagado"])
+    for u in usuarios.keys():
+        udata = db_data.get(u, {})
+        tot_f = sum(pf["monto"] for pf in udata.get("pagos_fijos", []) if pf.get("pagado", False))
         tot_g = sum(g["monto"] for g in udata.get("gastos_diarios", []))
         tot = tot_f + tot_g
         ing_base = udata.get("ingreso_inicial", 0.0)
@@ -593,30 +594,45 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
 
     with tab_ver:
         st.subheader("🔍 Supervisar Gastos e Ingresos por Perfil")
-        lista_insp = list(db_data.keys())
+        lista_insp = list(usuarios.keys())
         if lista_insp:
             u_inspect = st.selectbox("Elegir usuario para revisar sus movimientos:", lista_insp)
-            u_info = db_data[u_inspect]
+            u_info = db_data.get(u_inspect, {
+                "ingreso_inicial": 0.0,
+                "ingresos_extras": [],
+                "alcancia": 0.0,
+                "pagos_fijos": [],
+                "gastos_diarios": []
+            })
             
-            col_u1, col_u2 = st.columns(2)
             tot_ext_u = sum(ie["monto"] for ie in u_info.get("ingresos_extras", []))
-            col_u1.metric("Ingreso Total (Base + Extras)", fmt_moneda(u_info.get("ingreso_inicial", 0.0) + tot_ext_u))
-            col_u2.metric("Alcancía Acumulada", fmt_moneda(u_info.get("alcancia", 0.0)))
+            ing_tot_u = u_info.get("ingreso_inicial", 0.0) + tot_ext_u
+            tot_f_u = sum(pf["monto"] for pf in u_info.get("pagos_fijos", []) if pf.get("pagado", False))
+            tot_g_u = sum(g["monto"] for g in u_info.get("gastos_diarios", []))
+            tot_gastado_u = tot_f_u + tot_g_u
+            saldo_u = ing_tot_u - tot_gastado_u
 
-            st.write("💵 **Ingresos Extras:**")
+            c_u1, c_u2, c_u3, c_u4 = st.columns(4)
+            c_u1.metric("Ingreso Total", fmt_moneda(ing_tot_u))
+            c_u2.metric("Total Gastado", fmt_moneda(tot_gastado_u))
+            c_u3.metric("Saldo Disponible", fmt_moneda(saldo_u))
+            c_u4.metric("Alcancía Acumulada", fmt_moneda(u_info.get("alcancia", 0.0)))
+
+            st.divider()
+            st.write("💵 **Ingresos Extras Registrados:**")
             if u_info.get("ingresos_extras"):
                 st.dataframe(pd.DataFrame(u_info["ingresos_extras"]), use_container_width=True)
             else:
-                st.caption("Sin ingresos extras registrados.")
+                st.info("Este usuario aún no tiene ingresos extras registrados.")
 
-            st.write("📌 **Pagos Fijos:**")
+            st.write("📌 **Pagos Fijos Registrados:**")
             if u_info.get("pagos_fijos"):
                 st.dataframe(pd.DataFrame(u_info["pagos_fijos"]), use_container_width=True)
             else:
-                st.caption("Sin pagos fijos registrados.")
+                st.info("Este usuario aún no tiene pagos fijos registrados.")
 
-            st.write("🛒 **Gastos Diarios:**")
+            st.write("🛒 **Gastos Diarios Registrados:**")
             if u_info.get("gastos_diarios"):
                 st.dataframe(pd.DataFrame(u_info["gastos_diarios"]), use_container_width=True)
             else:
-                st.caption("Sin gastos diarios registrados.")
+                st.info("Este usuario aún no tiene gastos diarios registrados.")
