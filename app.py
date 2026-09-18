@@ -124,6 +124,7 @@ es_admin = (usr_actual == "admin")
 if usr_actual not in db_data:
     db_data[usr_actual] = {
         "ingreso_inicial": 0.0,
+        "ingresos_extras": [],
         "alcancia": 0.0,
         "meta_alcancia": 0.0,
         "nombre_meta": "Ahorro General",
@@ -134,6 +135,7 @@ if usr_actual not in db_data:
     }
 
 usr_data = db_data[usr_actual]
+usr_data.setdefault("ingresos_extras", [])
 usr_data.setdefault("alcancia", 0.0)
 usr_data.setdefault("meta_alcancia", 0.0)
 usr_data.setdefault("nombre_meta", "Ahorro General")
@@ -190,15 +192,15 @@ def fmt_moneda(monto):
 
 # --- SECCIÓN 1: PANEL Y PRESUPUESTO INICIAL ---
 if opcion == "💰 Mi Presupuesto & Panel":
-    st.header("💵 Ingreso Mensual y Saldo Disponible")
+    st.header("💵 Ingresos del Mes y Saldo Disponible")
     
     col_i1, col_i2 = st.columns(2)
     with col_i1:
-        nuevo_ingreso = st.number_input("Ingreso / Sueldo del Mes ($):", min_value=0.0, value=float(usr_data.get("ingreso_inicial", 0.0)), step=10000.0)
+        nuevo_ingreso = st.number_input("Sueldo / Base Inicial del Mes ($):", min_value=0.0, value=float(usr_data.get("ingreso_inicial", 0.0)), step=10000.0)
         if nuevo_ingreso != usr_data.get("ingreso_inicial"):
             usr_data["ingreso_inicial"] = nuevo_ingreso
             guardar_json(DATA_FILE, db_data)
-            st.success("Sueldo / Ingreso actualizado.")
+            st.success("Sueldo inicial actualizado.")
 
     with col_i2:
         alcancia_val = st.number_input("🐷 Alcancía de Ahorros ($):", min_value=0.0, value=float(usr_data.get("alcancia", 0.0)), step=5000.0)
@@ -207,33 +209,58 @@ if opcion == "💰 Mi Presupuesto & Panel":
             guardar_json(DATA_FILE, db_data)
             st.success("Alcancía actualizada.")
 
+    # REGISTRO DE INGRESOS EXTRAS
+    st.divider()
+    st.subheader("💵 Registrar Ingreso Extra / Cobro Adicional")
+    with st.form("form_ingreso_extra", clear_on_submit=True):
+        col_ie1, col_ie2, col_ie3 = st.columns([2, 1, 1])
+        detalle_ing = col_ie1.text_input("Detalle del Ingreso (ej. Venta, Trabajo Extra, Comisión)")
+        monto_ing = col_ie2.number_input("Monto ($)", min_value=0.0, step=1000.0)
+        fecha_ing = col_ie3.date_input("Fecha", datetime.now(), format="DD/MM/YYYY")
+        if st.form_submit_button("➕ Agregar Ingreso Extra"):
+            if monto_ing > 0:
+                usr_data["ingresos_extras"].append({
+                    "fecha": fecha_ing.strftime("%d/%m/%Y"),
+                    "detalle": detalle_ing if detalle_ing else "Ingreso Extra",
+                    "monto": monto_ing
+                })
+                guardar_json(DATA_FILE, db_data)
+                st.success("Ingreso extra agregado exitosamente.")
+                time.sleep(0.3)
+                st.rerun()
+
+    total_extras = sum(ie["monto"] for ie in usr_data["ingresos_extras"])
+    total_ingresos = usr_data["ingreso_inicial"] + total_extras
+    
     total_fijos_pagados = sum(pf["monto"] for pf in usr_data["pagos_fijos"] if pf["pagado"])
     total_gastos_diarios = sum(g["monto"] for g in usr_data["gastos_diarios"])
     total_gastado = total_fijos_pagados + total_gastos_diarios
-    saldo_disponible = usr_data["ingreso_inicial"] - total_gastado
+    saldo_disponible = total_ingresos - total_gastado
 
     st.divider()
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("💰 Ingreso Inicial", fmt_moneda(usr_data["ingreso_inicial"]))
+    c1.metric("💰 Total Ingresos", fmt_moneda(total_ingresos), delta=f"+{fmt_moneda(total_extras)} Extras" if total_extras > 0 else None)
     c2.metric("💸 Gastos Totales", fmt_moneda(total_gastado))
     c3.metric("🟢 Saldo Disponible", fmt_moneda(saldo_disponible))
     c4.metric("🐷 Alcancía Acumulada", fmt_moneda(usr_data["alcancia"]))
+
+    if usr_data["ingresos_extras"]:
+        with st.expander("📋 Ver detalle de Ingresos Extras del mes"):
+            for idx_ie, ie in enumerate(usr_data["ingresos_extras"]):
+                col_e1, col_e2, col_e3, col_e4 = st.columns([1, 2, 1, 1])
+                col_e1.write(ie["fecha"])
+                col_e2.write(f"💵 {ie['detalle']}")
+                col_e3.write(fmt_moneda(ie["monto"]))
+                if col_e4.button("🗑️ Borrar", key=f"del_ie_{idx_ie}"):
+                    usr_data["ingresos_extras"].pop(idx_ie)
+                    guardar_json(DATA_FILE, db_data)
+                    time.sleep(0.3)
+                    st.rerun()
 
     if usr_data["meta_alcancia"] > 0:
         st.subheader(f"🎯 Meta: {usr_data['nombre_meta']}")
         progreso = min(usr_data["alcancia"] / usr_data["meta_alcancia"], 1.0)
         st.progress(progreso, text=f"Llevas un {progreso*100:.1f}% alcanzado ({fmt_moneda(usr_data['alcancia'])} de {fmt_moneda(usr_data['meta_alcancia'])})")
-
-    if usr_data["usar_presupuestos"] and usr_data["gastos_diarios"]:
-        df_tmp = pd.DataFrame(usr_data["gastos_diarios"])
-        gastado_cat = df_tmp.groupby("categoria")["monto"].sum()
-        for cat, limite in usr_data["presupuestos_cat"].items():
-            if limite > 0:
-                gastado = gastado_cat.get(cat, 0.0)
-                if gastado >= limite:
-                    st.error(f"⚠️ **Superaste el límite en {cat}**: Gastaste {fmt_moneda(gastado)} (Límite: {fmt_moneda(limite)})")
-                elif gastado >= limite * 0.8:
-                    st.warning(f"⚡ **Cerca del límite en {cat}**: Gastaste {fmt_moneda(gastado)} de {fmt_moneda(limite)}")
 
     st.divider()
     st.subheader("🔄 Cierre y Reinicio de Mes")
@@ -242,6 +269,7 @@ if opcion == "💰 Mi Presupuesto & Panel":
         if saldo_disponible > 0:
             usr_data["alcancia"] += saldo_disponible
         usr_data["gastos_diarios"] = []
+        usr_data["ingresos_extras"] = []
         for pf in usr_data["pagos_fijos"]:
             pf["pagado"] = False
         guardar_json(DATA_FILE, db_data)
@@ -249,10 +277,11 @@ if opcion == "💰 Mi Presupuesto & Panel":
         time.sleep(0.3)
         st.rerun()
 
-    if col_reset2.button("🗑️ Borrar Gastos Diarios sin alterar Alcancía"):
+    if col_reset2.button("🗑️ Borrar Gastos e Ingresos Extras sin alterar Alcancía"):
         usr_data["gastos_diarios"] = []
+        usr_data["ingresos_extras"] = []
         guardar_json(DATA_FILE, db_data)
-        st.success("Gastos diarios reiniciados.")
+        st.success("Gastos e ingresos extras reiniciados.")
         time.sleep(0.3)
         st.rerun()
 
@@ -458,7 +487,7 @@ elif opcion == "📊 Reportes & Exportaciones":
                 ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#FFB6C1")),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
                 ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)
             ]))
             elements.append(t_det)
@@ -503,12 +532,14 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
         tot_f = sum(pf["monto"] for pf in udata.get("pagos_fijos", []) if pf["pagado"])
         tot_g = sum(g["monto"] for g in udata.get("gastos_diarios", []))
         tot = tot_f + tot_g
-        ing = udata.get("ingreso_inicial", 0.0)
+        ing_base = udata.get("ingreso_inicial", 0.0)
+        tot_ext = sum(ie["monto"] for ie in udata.get("ingresos_extras", []))
+        ing_tot = ing_base + tot_ext
         resumen_admin.append({
             "Usuario": u.capitalize(),
-            "Ingreso ($)": fmt_moneda(ing),
+            "Ingreso Total ($)": fmt_moneda(ing_tot),
             "Gastado ($)": fmt_moneda(tot),
-            "Saldo Restante": fmt_moneda(ing - tot),
+            "Saldo Restante": fmt_moneda(ing_tot - tot),
             "Alcancía ($)": fmt_moneda(udata.get("alcancia", 0.0))
         })
     st.dataframe(pd.DataFrame(resumen_admin), use_container_width=True)
@@ -561,15 +592,22 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
             st.info("No hay otros usuarios registrados además de la administradora.")
 
     with tab_ver:
-        st.subheader("🔍 Supervisar Gastos por Perfil de Usuario")
+        st.subheader("🔍 Supervisar Gastos e Ingresos por Perfil")
         lista_insp = list(db_data.keys())
         if lista_insp:
             u_inspect = st.selectbox("Elegir usuario para revisar sus movimientos:", lista_insp)
             u_info = db_data[u_inspect]
             
             col_u1, col_u2 = st.columns(2)
-            col_u1.metric("Ingreso Registrado", fmt_moneda(u_info.get("ingreso_inicial", 0.0)))
+            tot_ext_u = sum(ie["monto"] for ie in u_info.get("ingresos_extras", []))
+            col_u1.metric("Ingreso Total (Base + Extras)", fmt_moneda(u_info.get("ingreso_inicial", 0.0) + tot_ext_u))
             col_u2.metric("Alcancía Acumulada", fmt_moneda(u_info.get("alcancia", 0.0)))
+
+            st.write("💵 **Ingresos Extras:**")
+            if u_info.get("ingresos_extras"):
+                st.dataframe(pd.DataFrame(u_info["ingresos_extras"]), use_container_width=True)
+            else:
+                st.caption("Sin ingresos extras registrados.")
 
             st.write("📌 **Pagos Fijos:**")
             if u_info.get("pagos_fijos"):
