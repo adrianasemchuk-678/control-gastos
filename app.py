@@ -15,8 +15,13 @@ from reportlab.lib import colors
 
 st.set_page_config(page_title="Control de Gastos AS", page_icon="🌸", layout="wide")
 
-# --- ESTILOS VISUALES & MARCA PERSONAL (AS) ---
+# --- BLOQUEAR TRADUCTOR AUTOMÁTICO Y APLICAR ESTILOS ---
 st.markdown("""
+    <script>
+        document.documentElement.setAttribute('lang', 'es');
+        document.documentElement.setAttribute('class', 'notranslate');
+        document.documentElement.setAttribute('translate', 'no');
+    </script>
     <style>
     .main { background-color: #FAFAFA; }
     .stButton>button { background-color: #FFB6C1; color: black; border-radius: 10px; font-weight: bold; }
@@ -89,7 +94,7 @@ if "usuario_actual" not in st.session_state:
 
 if st.session_state["usuario_actual"] is None:
     st.markdown("""
-        <div class="brand-header">
+        <div class="brand-header notranslate">
             <div class="brand-logo">AS</div>
             <div>
                 <div class="brand-title">Control de Gastos & Alcancía</div>
@@ -106,7 +111,7 @@ if st.session_state["usuario_actual"] is None:
             if user_input in usuarios and usuarios[user_input] == pass_input:
                 st.session_state["usuario_actual"] = user_input
                 st.success(f"¡Bienvenido/a {user_input}!")
-                time.sleep(0.5)
+                time.sleep(0.3)
                 st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos.")
@@ -141,7 +146,7 @@ hoy = datetime.now()
 nombre_mes_actual = f"{MESES[hoy.month - 1]} {hoy.year}"
 
 st.markdown(f"""
-    <div class="brand-header">
+    <div class="brand-header notranslate">
         <div class="brand-logo">AS</div>
         <div style="flex-grow: 1;">
             <div class="brand-title">Control de Gastos & Alcancía</div>
@@ -241,12 +246,14 @@ if opcion == "💰 Mi Presupuesto & Panel":
             pf["pagado"] = False
         guardar_json(DATA_FILE, db_data)
         st.success("¡Mes cerrado! Sobrante guardado en la alcancía y registros limpios.")
+        time.sleep(0.3)
         st.rerun()
 
     if col_reset2.button("🗑️ Borrar Gastos Diarios sin alterar Alcancía"):
         usr_data["gastos_diarios"] = []
         guardar_json(DATA_FILE, db_data)
         st.success("Gastos diarios reiniciados.")
+        time.sleep(0.3)
         st.rerun()
 
 # --- SECCIÓN 2: PAGOS FIJOS ---
@@ -270,6 +277,7 @@ elif opcion == "📌 Pagos Fijos":
             })
             guardar_json(DATA_FILE, db_data)
             st.success("Pago fijo agregado.")
+            time.sleep(0.3)
             st.rerun()
 
     if usr_data["pagos_fijos"]:
@@ -284,11 +292,13 @@ elif opcion == "📌 Pagos Fijos":
             if col_d.button(label_estado, key=f"pay_{idx}"):
                 usr_data["pagos_fijos"][idx]["pagado"] = not usr_data["pagos_fijos"][idx]["pagado"]
                 guardar_json(DATA_FILE, db_data)
+                time.sleep(0.3)
                 st.rerun()
 
             if col_e.button("🗑️ Eliminar", key=f"del_pf_{idx}"):
                 usr_data["pagos_fijos"].pop(idx)
                 guardar_json(DATA_FILE, db_data)
+                time.sleep(0.3)
                 st.rerun()
 
 # --- SECCIÓN 3: GASTOS DIARIOS ---
@@ -315,6 +325,7 @@ elif opcion == "🛒 Gastos Diarios":
                 })
                 guardar_json(DATA_FILE, db_data)
                 st.success("Gasto registrado correctamente.")
+                time.sleep(0.3)
                 st.rerun()
 
     if usr_data["gastos_diarios"]:
@@ -327,6 +338,7 @@ elif opcion == "🛒 Gastos Diarios":
             if col4.button("🗑️ Eliminar", key=f"del_g_{idx}"):
                 usr_data["gastos_diarios"].pop(idx)
                 guardar_json(DATA_FILE, db_data)
+                time.sleep(0.3)
                 st.rerun()
 
 # --- SECCIÓN 4: PREFERENCIAS ---
@@ -513,7 +525,7 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
                 usuarios[nu] = np
                 guardar_json(USERS_FILE, usuarios)
                 st.success(f"¡Usuario '{nu}' creado exitosamente!")
-                time.sleep(0.5)
+                time.sleep(0.3)
                 st.rerun()
             else:
                 st.warning("Completa el usuario y la contraseña.")
@@ -531,7 +543,7 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
                     usuarios[usr_sel] = n_pass
                     guardar_json(USERS_FILE, usuarios)
                     st.success(f"Contraseña de '{usr_sel}' actualizada.")
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                     st.rerun()
                 else:
                     st.warning("Ingresa una contraseña válida.")
@@ -543,7 +555,7 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
                 guardar_json(USERS_FILE, usuarios)
                 guardar_json(DATA_FILE, db_data)
                 st.success(f"Usuario '{usr_sel}' eliminado del sistema.")
-                time.sleep(0.5)
+                time.sleep(0.3)
                 st.rerun()
         else:
             st.info("No hay otros usuarios registrados además de la administradora.")
