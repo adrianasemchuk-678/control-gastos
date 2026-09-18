@@ -2,10 +2,8 @@ import streamlit as st
 import datetime
 import database as db
 
-# Configuración adaptable a pantallas de celulares
 st.set_page_config(page_title="Control de Gastos", page_icon="🌷", layout="centered")
 
-# Estilo Nude (tonos crema, beige y café suave)
 st.markdown("""
     <style>
     .stApp {
@@ -37,12 +35,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# PIN constante del Admin
 PIN_ADMIN_CORRECTO = "5861"
 
 st.title("🌷 Control de Gastos")
 
-# --- BARRA LATERAL (PERMISOS Y USUARIOS) ---
 st.sidebar.header("🔑 Acceso y Permisos")
 
 pin_ingresado = st.sidebar.text_input("Código de Acceso / PIN Admin", type="password", help="Ingresa 5861 para modo Administrador")
@@ -57,14 +53,11 @@ else:
 
 st.sidebar.divider()
 
-# Cargar lista dinámica de usuarios
 lista_usuarios = db.obtener_usuarios()
 
-# Selección de Usuario Actual
 st.sidebar.subheader("👤 Mi Usuario")
 usuario_activo = st.sidebar.selectbox("¿Quién está usando la app?", lista_usuarios)
 
-# Opción para agregar nuevo usuario
 with st.sidebar.expander("➕ Crear nuevo usuario"):
     nuevo_nombre = st.text_input("Nombre de la nueva persona:")
     if st.button("Guardar Usuario"):
@@ -73,22 +66,16 @@ with st.sidebar.expander("➕ Crear nuevo usuario"):
             st.sidebar.success(f"¡Usuario '{nuevo_nombre}' creado!")
             st.rerun()
 
-# Filtro de visualización (Solo activo si es Administrador)
 if es_admin:
     st.sidebar.divider()
     st.sidebar.subheader("👀 Vista Global (Admin)")
     opciones_filtro = ["Todos"] + lista_usuarios
     usuario_filtro = st.sidebar.selectbox("Filtrar registros por:", opciones_filtro)
 else:
-    # El usuario común solo ve sus propios datos
     usuario_filtro = usuario_activo
 
-# --- PESTAÑAS PRINCIPALES ---
 tab_gastos, tab_pagos, tab_admin = st.tabs(["💸 Registrar Gastos", "📅 Pagos Fijos", "⚙️ Ajustes"])
 
-# ==========================================
-# PESTAÑA 1: GASTOS DIARIOS
-# ==========================================
 with tab_gastos:
     st.subheader(f"Registrar Gasto a nombre de: **{usuario_activo}**")
     
@@ -126,9 +113,6 @@ with tab_gastos:
                 </div>
             """, unsafe_allow_html=True)
 
-# ==========================================
-# PESTAÑA 2: PAGOS FIJOS Y RECORDATORIOS
-# ==========================================
 with tab_pagos:
     st.subheader("Pagos Fijos del Mes")
     
@@ -157,7 +141,6 @@ with tab_pagos:
         for p in pagos:
             p_id = p["id"]
             
-            # Modo Edición
             if st.session_state.edit_id == p_id:
                 with st.form(f"edit_pago_{p_id}"):
                     e_concepto = st.text_input("Concepto", value=p["concepto"])
@@ -192,9 +175,6 @@ with tab_pagos:
                         db.eliminar_pago_fijo(p_id)
                         st.rerun()
 
-# ==========================================
-# PESTAÑA 3: OPCIONES DE ADMINISTRADOR
-# ==========================================
 with tab_admin:
     st.subheader("Opciones Avanzadas")
     

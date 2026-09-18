@@ -1,7 +1,6 @@
 import os
 import sqlite3
 
-# Intentar importar Supabase si está configurado
 try:
     from supabase import create_client, Client
     SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -24,7 +23,6 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Crear tabla Usuarios
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,7 +30,6 @@ def init_db():
         )
     """)
     
-    # Crear tabla Gastos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS gastos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +41,6 @@ def init_db():
         )
     """)
 
-    # Crear tabla Pagos Fijos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pagos_fijos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +51,6 @@ def init_db():
         )
     """)
     
-    # Insertar usuarios base si está vacía
     cursor.execute("SELECT COUNT(*) FROM usuarios")
     if cursor.fetchone()[0] == 0:
         cursor.executemany("INSERT INTO usuarios (nombre) VALUES (?)", [("Adriana",), ("Diego",)])
@@ -63,10 +58,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-# --- USUARIOS ---
-
 def obtener_usuarios():
-    init_db()  # Asegura que las tablas existan antes de consultar
+    init_db()
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT nombre FROM usuarios ORDER BY nombre ASC")
@@ -87,8 +80,6 @@ def agregar_usuario(nombre):
     except sqlite3.IntegrityError:
         pass
     conn.close()
-
-# --- GASTOS ---
 
 def obtener_gastos(usuario_filtro=None):
     init_db()
@@ -112,8 +103,6 @@ def registrar_gasto(fecha, concepto, monto, categoria, usuario):
     )
     conn.commit()
     conn.close()
-
-# --- PAGOS FIJOS ---
 
 def obtener_pagos_fijos(usuario_filtro=None):
     init_db()
@@ -157,8 +146,6 @@ def eliminar_pago_fijo(id_pago):
     conn.commit()
     conn.close()
 
-# --- ADMINISTRACIÓN ---
-
 def borrar_todos_los_datos():
     init_db()
     conn = get_connection()
@@ -168,5 +155,4 @@ def borrar_todos_los_datos():
     conn.commit()
     conn.close()
 
-# Forzar inicialización al importar
 init_db()
