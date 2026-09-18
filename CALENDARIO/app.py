@@ -2,35 +2,20 @@ import streamlit as st
 import json
 import os
 import datetime
+import urllib.parse
 
-st.set_page_config(page_title="Mi Agenda & Calendario Pastel", page_icon="🌸", layout="wide")
+st.set_page_config(page_title="Mi Agenda Pastel", page_icon="🌸", layout="wide")
 
-# Estilos CSS personalizados con colores pasteles vivos y bonitos
 st.markdown("""
 <style>
-    /* Fondo general suave */
-    .stApp { 
-        background: linear-gradient(135deg, #fefae0 0%, #f3e8ff 100%); 
-    }
-    
-    /* Botones principales */
+    .stApp { background: linear-gradient(135deg, #fefae0 0%, #f3e8ff 100%); }
     .stButton>button {
         background: linear-gradient(90deg, #a855f7 0%, #ec4899 100%);
         color: white !important;
         border-radius: 12px !important;
         border: none !important;
-        padding: 0.6rem 1.2rem !important;
+        padding: 0.5rem 1rem !important;
         font-weight: bold !important;
-        box-shadow: 0 4px 10px rgba(236, 72, 153, 0.2);
-    }
-    
-    /* Tarjeta de eventos */
-    .card-evento {
-        background-color: #ffffff;
-        padding: 18px;
-        border-radius: 16px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-        margin-bottom: 14px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -53,6 +38,25 @@ def guardar_datos(datos):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(datos, f, ensure_ascii=False, indent=4)
 
+def generar_link_google_calendar(titulo, fecha_str, hora_str, notas):
+    try:
+        dt_inicio = datetime.datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M:%S")
+    except:
+        dt_inicio = datetime.datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M")
+    
+    dt_fin = dt_inicio + datetime.timedelta(hours=1)
+    
+    fmt = "%Y%m%dT%H%M%SZ"
+    dates = f"{dt_inicio.strftime(fmt)}/{dt_fin.strftime(fmt)}"
+    
+    params = {
+        "action": "TEMPLATE",
+        "text": titulo,
+        "dates": dates,
+        "details": notas
+    }
+    return f"https://calendar.google.com/calendar/render?{urllib.parse.urlencode(params)}"
+
 datos = cargar_datos()
 
 CATEGORIAS = {
@@ -71,14 +75,14 @@ if "usuario_actual" not in st.session_state:
     st.session_state["usuario_actual"] = None
     st.session_state["rol_actual"] = None
 
-# ----------------- LOGIN -----------------
+# LOGIN
 if not st.session_state["usuario_actual"]:
     st.title("🌸 Inicio de Sesión — Mi Agenda")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         user_input = st.text_input("👤 Usuario:").strip().lower()
         pass_input = st.text_input("🔑 Contraseña:", type="password")
-        if st.button("✨ Ingresar a la App"):
+        if st.button("✨ Ingresar"):
             if user_input in datos["usuarios"] and datos["usuarios"][user_input]["clave"] == pass_input:
                 st.session_state["usuario_actual"] = user_input
                 st.session_state["rol_actual"] = datos["usuarios"][user_input]["rol"]
@@ -87,9 +91,8 @@ if not st.session_state["usuario_actual"]:
                 st.error("Usuario o contraseña incorrectos.")
     st.stop()
 
-# ----------------- BARRA LATERAL -----------------
+# BARRA LATERAL
 st.sidebar.title(f"👑 ¡Hola, {st.session_state['usuario_actual'].capitalize()}!")
-
 opciones_menu = ["📅 Mi Agenda Personal"]
 if st.session_state["rol_actual"] == "admin":
     opciones_menu.append("⚙️ Gestión de Usuarios (Admin)")
@@ -101,31 +104,31 @@ if st.sidebar.button("🚪 Cerrar Sesión"):
     st.session_state["rol_actual"] = None
     st.rerun()
 
-# ----------------- AGENDA -----------------
+# AGENDA
 if opcion == "📅 Mi Agenda Personal":
     st.title("💖 Mi Agenda & Recordatorios Pastel")
-    st.write("Agendá tus turnos, compromisos y vencimientos con avisos a medida.")
 
     with st.expander("➕ Agendar nuevo compromiso / turno", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
-            titulo = st.text_input("📝 Título (ej: Turno con Fabiana, Seguro Moto):")
+            titulo = st.text_input("📝 Título (ej: Turno con Fabiana):")
             categoria = st.selectbox("🏷️ Categoría:", list(CATEGORIAS.keys()))
             fecha = st.date_input("📅 Fecha:", datetime.date.today())
-            hora = st.time_input("⏰ Hora:", datetime.time(9, 0))
+            hora = st.time_input("⏰ Hora:", datetime.time(19, 30))
 
         with col2:
             alertas = st.multiselect(
-                "🔔 ¿Cuándo querés que te avise?",
+                "🔔 Recordatorios deseados:",
                 ["1 semana antes", "2 días antes", "1 día antes", "2 horas antes", "30 minutos antes"],
                 default=["1 día antes", "2 horas antes"]
             )
-            notas = st.text_area("📌 Notas o detalles importantes:")
+            notas = st.text_area("📌 Notas:")
 
         if st.button("💖 Guardar en la Agenda"):
             if titulo:
                 emoji = CATEGORIAS[categoria]["emoji"]
                 nuevo_evento = {
+                    "id": len(datos["eventos"]) + 1,
                     "usuario": st.session_state["usuario_actual"],
                     "titulo": f"{emoji} {titulo}",
                     "categoria": categoria,
@@ -136,10 +139,10 @@ if opcion == "📅 Mi Agenda Personal":
                 }
                 datos["eventos"].append(nuevo_evento)
                 guardar_datos(datos)
-                st.success(f"¡Agendado exitosamente! {emoji} {titulo}")
+                st.success("¡Agendado con éxito!")
                 st.rerun()
             else:
-                st.warning("Escribí un título para guardar.")
+                st.warning("Ingresá un título.")
 
     st.markdown("---")
     st.subheader("📋 Mis compromisos registrados")
@@ -147,23 +150,35 @@ if opcion == "📅 Mi Agenda Personal":
     eventos_propios = [e for e in datos["eventos"] if e.get("usuario") == st.session_state["usuario_actual"]]
 
     if eventos_propios:
-        for ev in reversed(eventos_propios):
+        for idx, ev in enumerate(reversed(eventos_propios)):
             info_cat = CATEGORIAS.get(ev["categoria"], {"color": "#f1f5f9", "borde": "#a855f7"})
             bg_color = info_cat["color"]
             border_color = info_cat["borde"]
             
-            st.markdown(f"""
-            <div style="background-color: {bg_color}; padding: 16px; border-radius: 14px; border-left: 8px solid {border_color}; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
-                <h3 style="margin: 0; color: #1e293b; font-size: 1.2rem;">{ev['titulo']}</h3>
-                <p style="margin: 6px 0; color: #475569;">📅 <b>Fecha:</b> {ev['fecha']} | ⏰ <b>Hora:</b> {ev['hora']}</p>
-                <p style="margin: 4px 0; color: #475569;">🔔 <b>Alertas:</b> {', '.join(ev['alertas']) if ev['alertas'] else 'Sin alertas'}</p>
-                {f'<p style="margin: 4px 0; color: #475569;">📝 <b>Notas:</b> {ev["notas"]}</p>' if ev['notas'] else ''}
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.info("Aún no tenés compromisos cargados en tu cuenta.")
+            link_gcal = generar_link_google_calendar(ev['titulo'], ev['fecha'], ev['hora'], ev['notas'])
 
-# ----------------- ADMIN -----------------
+            col_card, col_acc = st.columns([4, 1])
+
+            with col_card:
+                st.markdown(f"""
+                <div style="background-color: {bg_color}; padding: 16px; border-radius: 14px; border-left: 8px solid {border_color}; margin-bottom: 10px;">
+                    <h3 style="margin: 0; color: #1e293b;">{ev['titulo']}</h3>
+                    <p style="margin: 4px 0; color: #475569;">📅 <b>Fecha:</b> {ev['fecha']} | ⏰ <b>Hora:</b> {ev['hora']}</p>
+                    <p style="margin: 4px 0; color: #475569;">🔔 <b>Alertas:</b> {', '.join(ev['alertas']) if ev['alertas'] else 'Sin alertas'}</p>
+                    {f'<p style="margin: 4px 0; color: #475569;">📝 <b>Notas:</b> {ev["notas"]}</p>' if ev['notas'] else ''}
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_acc:
+                st.link_button("📅 Enviar a Google", link_gcal)
+                if st.button("🗑️ Eliminar", key=f"del_{ev.get('id', idx)}"):
+                    datos["eventos"] = [e for e in datos["eventos"] if e != ev]
+                    guardar_datos(datos)
+                    st.rerun()
+    else:
+        st.info("Aún no tenés compromisos cargados.")
+
+# ADMIN
 elif opcion == "⚙️ Gestión de Usuarios (Admin)":
     st.title("⚙️ Panel de Administración")
     
@@ -174,18 +189,17 @@ elif opcion == "⚙️ Gestión de Usuarios (Admin)":
         nuevo_user = st.text_input("Nombre de usuario:").strip().lower()
         nueva_pass = st.text_input("Contraseña asignada:")
         es_admin = st.checkbox("¿Es Administrador?")
-        
         if st.button("Crear Usuario"):
             if nuevo_user and nueva_pass:
                 if nuevo_user in datos["usuarios"]:
-                    st.error("El nombre de usuario ya existe.")
+                    st.error("El usuario ya existe.")
                 else:
                     rol = "admin" if es_admin else "user"
                     datos["usuarios"][nuevo_user] = {"clave": nueva_pass, "rol": rol}
                     guardar_datos(datos)
                     st.success(f"Usuario '{nuevo_user}' creado.")
             else:
-                st.warning("Completa usuario y contraseña.")
+                st.warning("Completa los campos.")
 
     with t2:
         st.subheader("Cambiar contraseña")
@@ -195,12 +209,12 @@ elif opcion == "⚙️ Gestión de Usuarios (Admin)":
             if pass_nueva:
                 datos["usuarios"][user_mod]["clave"] = pass_nueva
                 guardar_datos(datos)
-                st.success(f"Contraseña actualizada para {user_mod}.")
+                st.success("Contraseña actualizada.")
 
     with t3:
         st.subheader("Eliminar usuario")
-        user_del = st.selectbox("Seleccionar usuario a eliminar:", [u for u in datos["usuarios"].keys() if u != "adriana"])
-        if st.button("Eliminar"):
+        user_del = st.selectbox("Seleccionar usuario:", [u for u in datos["usuarios"].keys() if u != "adriana"])
+        if st.button("Eliminar Usuario"):
             if user_del:
                 del datos["usuarios"][user_del]
                 datos["eventos"] = [e for e in datos["eventos"] if e.get("usuario") != user_del]
@@ -210,10 +224,10 @@ elif opcion == "⚙️ Gestión de Usuarios (Admin)":
 
     with t4:
         st.subheader("Supervisar agendas")
-        user_ver = st.selectbox("Elegí el usuario:", list(datos["usuarios"].keys()))
+        user_ver = st.selectbox("Usuario:", list(datos["usuarios"].keys()))
         eventos_ver = [e for e in datos["eventos"] if e.get("usuario") == user_ver]
         if eventos_ver:
             for ev in eventos_ver:
-                st.write(f"- **{ev['titulo']}** | Fecha: {ev['fecha']} {ev['hora']}")
+                st.write(f"- **{ev['titulo']}** | {ev['fecha']} {ev['hora']}")
         else:
             st.info(f"'{user_ver}' no tiene eventos.")
