@@ -13,9 +13,15 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-st.set_page_config(page_title="Control de Gastos AS", page_icon="🌸", layout="wide")
+# CONFIGURACIÓN DE PÁGINA: Forzamos barra lateral visible (expanded)
+st.set_page_config(
+    page_title="Control de Gastos AS",
+    page_icon="🌸",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- BLOQUEAR TRADUCTOR AUTOMÁTICO Y APLICAR ESTILOS ---
+# --- BLOQUEAR TRADUCTOR AUTOMÁTICO Y FORZAR VISTA ESCRITORIO EN MÓVIL ---
 st.markdown("""
     <script>
         document.documentElement.setAttribute('lang', 'es');
@@ -26,6 +32,18 @@ st.markdown("""
     .main { background-color: #FAFAFA; }
     .stButton>button { background-color: #FFB6C1; color: black; border-radius: 10px; font-weight: bold; }
     
+    /* Adaptación para forzar visualización de escritorio amplia en pantallas pequeñas */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            max-width: 100% !important;
+        }
+        [data-testid="stSidebar"] {
+            min-width: 260px !important;
+        }
+    }
+
     .brand-header {
         display: flex;
         align-items: center;

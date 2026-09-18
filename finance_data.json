@@ -1,25 +1,49 @@
 {
     "admin": {
-        "ingreso_inicial": 100000000.0,
+        "ingreso_inicial": 715000.0,
         "pagos_fijos": [
             {
-                "concepto": "📦 Internet",
-                "monto": 500000.0,
+                "concepto": "🏋️‍♀️ Gym",
+                "monto": 40000.0,
+                "vencimiento": "10",
+                "pagado": false
+            },
+            {
+                "concepto": "🎾 Padel profe",
+                "monto": 48000.0,
+                "vencimiento": "10",
+                "pagado": false
+            },
+            {
+                "concepto": "🎾 Cancha padel",
+                "monto": 40000.0,
+                "vencimiento": "10",
+                "pagado": false
+            },
+            {
+                "concepto": "🏋️‍♀️ Gym profe",
+                "monto": 120000.0,
                 "vencimiento": "10",
                 "pagado": false
             }
         ],
-        "gastos_diarios": [
-            {
-                "fecha": "18/09/2026",
-                "categoria": "📦 Salud / estética",
-                "monto": 50000.0
-            }
-        ],
-        "alcancia": 99500000.0,
+        "gastos_diarios": [],
+        "alcancia": 0.0,
         "meta_alcancia": 0.0,
         "nombre_meta": "Ahorro General",
         "usar_presupuestos": false,
-        "presupuestos_cat": {}
+        "presupuestos_cat": {},
+        "ingresos_extras": []
+    },
+    "Micaela": {
+        "ingreso_inicial": 1000000.0,
+        "ingresos_extras": [],
+        "alcancia": 200000.0,
+        "meta_alcancia": 0.0,
+        "nombre_meta": "Ahorro General",
+        "usar_presupuestos": false,
+        "presupuestos_cat": {},
+        "pagos_fijos": [],
+        "gastos_diarios": []
     }
 }
