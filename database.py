@@ -1,7 +1,7 @@
 import os
 import sqlite3
 
-# Intentar importar Supabase si está configurado en las variables de entorno
+# Intentar importar Supabase si está configurado
 try:
     from supabase import create_client, Client
     SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -24,7 +24,7 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Tabla de Usuarios
+    # Crear tabla Usuarios
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,7 +32,7 @@ def init_db():
         )
     """)
     
-    # Tabla de Gastos con columna 'usuario'
+    # Crear tabla Gastos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS gastos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +44,7 @@ def init_db():
         )
     """)
 
-    # Tabla de Pagos Fijos con columna 'usuario'
+    # Crear tabla Pagos Fijos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pagos_fijos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +55,7 @@ def init_db():
         )
     """)
     
-    # Insertar usuarios por defecto si está vacía
+    # Insertar usuarios base si está vacía
     cursor.execute("SELECT COUNT(*) FROM usuarios")
     if cursor.fetchone()[0] == 0:
         cursor.executemany("INSERT INTO usuarios (nombre) VALUES (?)", [("Adriana",), ("Diego",)])
@@ -66,6 +66,7 @@ def init_db():
 # --- USUARIOS ---
 
 def obtener_usuarios():
+    init_db()  # Asegura que las tablas existan antes de consultar
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT nombre FROM usuarios ORDER BY nombre ASC")
@@ -74,6 +75,7 @@ def obtener_usuarios():
     return [row["nombre"] for row in rows]
 
 def agregar_usuario(nombre):
+    init_db()
     nombre_limpio = nombre.strip().capitalize()
     if not nombre_limpio:
         return
@@ -83,12 +85,13 @@ def agregar_usuario(nombre):
         cursor.execute("INSERT INTO usuarios (nombre) VALUES (?)", (nombre_limpio,))
         conn.commit()
     except sqlite3.IntegrityError:
-        pass # El usuario ya existe
+        pass
     conn.close()
 
 # --- GASTOS ---
 
 def obtener_gastos(usuario_filtro=None):
+    init_db()
     conn = get_connection()
     cursor = conn.cursor()
     if usuario_filtro and usuario_filtro != "Todos":
@@ -100,6 +103,7 @@ def obtener_gastos(usuario_filtro=None):
     return [dict(row) for row in rows]
 
 def registrar_gasto(fecha, concepto, monto, categoria, usuario):
+    init_db()
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -112,6 +116,7 @@ def registrar_gasto(fecha, concepto, monto, categoria, usuario):
 # --- PAGOS FIJOS ---
 
 def obtener_pagos_fijos(usuario_filtro=None):
+    init_db()
     conn = get_connection()
     cursor = conn.cursor()
     if usuario_filtro and usuario_filtro != "Todos":
@@ -123,6 +128,7 @@ def obtener_pagos_fijos(usuario_filtro=None):
     return [dict(row) for row in rows]
 
 def agregar_pago_fijo(concepto, monto, dia_vencimiento, usuario):
+    init_db()
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -133,6 +139,7 @@ def agregar_pago_fijo(concepto, monto, dia_vencimiento, usuario):
     conn.close()
 
 def actualizar_pago_fijo(id_pago, concepto, monto, dia_vencimiento):
+    init_db()
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -143,6 +150,7 @@ def actualizar_pago_fijo(id_pago, concepto, monto, dia_vencimiento):
     conn.close()
 
 def eliminar_pago_fijo(id_pago):
+    init_db()
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM pagos_fijos WHERE id = ?", (id_pago,))
@@ -152,6 +160,7 @@ def eliminar_pago_fijo(id_pago):
 # --- ADMINISTRACIÓN ---
 
 def borrar_todos_los_datos():
+    init_db()
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM gastos")
@@ -159,5 +168,5 @@ def borrar_todos_los_datos():
     conn.commit()
     conn.close()
 
-# Inicializar Base de Datos
+# Forzar inicialización al importar
 init_db()
