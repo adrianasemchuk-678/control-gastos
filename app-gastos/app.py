@@ -3,7 +3,6 @@ import pandas as pd
 import json
 import os
 import time
-import subprocess
 import matplotlib.pyplot as plt
 from datetime import datetime
 from io import BytesIO
@@ -22,13 +21,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- BLOQUEAR TRADUCTOR AUTOMÁTICO Y APLICAR ESTILOS ---
+# --- ESTILOS VISUALES ---
 st.markdown("""
-    <script>
-        document.documentElement.setAttribute('lang', 'es');
-        document.documentElement.setAttribute('class', 'notranslate');
-        document.documentElement.setAttribute('translate', 'no');
-    </script>
     <style>
     .main { background-color: #FAFAFA; }
     .stButton>button { background-color: #FFB6C1; color: black; border-radius: 10px; font-weight: bold; }
@@ -84,7 +78,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- ARCHIVOS DE DATOS PERMANENTES CON RESPALDO AUTOMÁTICO ---
+# --- ARCHIVOS DE DATOS ---
 USERS_FILE = "users.json"
 DATA_FILE = "finance_data.json"
 
@@ -100,22 +94,12 @@ def cargar_json(filepath, default):
         return default
 
 def guardar_json(filepath, data):
-    # 1. Guardar localmente
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
-    
-    # 2. Respaldo automático en GitHub para que nunca se pierda nada
-    try:
-        subprocess.run(["git", "add", filepath], check=False)
-        subprocess.run(["git", "commit", "-m", f"Auto-backup: actualización en {filepath}"], check=False)
-        subprocess.run(["git", "push"], check=False)
-    except Exception:
-        pass  # Evita interrumpir la app si hay problemas de red en el momento
 
 usuarios = cargar_json(USERS_FILE, {"admin": "5861"})
 db_data = cargar_json(DATA_FILE, {})
 
-# Asegurar usuario admin por defecto si el archivo está vacío
 if "admin" not in usuarios:
     usuarios["admin"] = "5861"
     guardar_json(USERS_FILE, usuarios)
@@ -126,7 +110,7 @@ if "usuario_actual" not in st.session_state:
 
 if st.session_state["usuario_actual"] is None:
     st.markdown("""
-        <div class="brand-header notranslate">
+        <div class="brand-header">
             <div class="brand-logo">AS</div>
             <div>
                 <div class="brand-title">Control de Gastos & Alcancía</div>
@@ -152,7 +136,6 @@ if st.session_state["usuario_actual"] is None:
 usr_actual = st.session_state["usuario_actual"]
 es_admin = (usr_actual == "admin")
 
-# Estructura inicial de datos por usuario
 if usr_actual not in db_data:
     db_data[usr_actual] = {
         "ingreso_inicial": 0.0,
@@ -174,13 +157,12 @@ usr_data.setdefault("nombre_meta", "Ahorro General")
 usr_data.setdefault("usar_presupuestos", False)
 usr_data.setdefault("presupuestos_cat", {})
 
-# HELPER DE FECHAS Y FORMATOS
 MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 hoy = datetime.now()
 nombre_mes_actual = f"{MESES[hoy.month - 1]} {hoy.year}"
 
 st.markdown(f"""
-    <div class="brand-header notranslate">
+    <div class="brand-header">
         <div class="brand-logo">AS</div>
         <div style="flex-grow: 1;">
             <div class="brand-title">Control de Gastos & Alcancía</div>
@@ -232,16 +214,15 @@ if opcion == "💰 Mi Presupuesto & Panel":
         if nuevo_ingreso != usr_data.get("ingreso_inicial"):
             usr_data["ingreso_inicial"] = nuevo_ingreso
             guardar_json(DATA_FILE, db_data)
-            st.success("Sueldo inicial actualizado y respaldado.")
+            st.success("Sueldo inicial actualizado.")
 
     with col_i2:
         alcancia_val = st.number_input("🐷 Alcancía de Ahorros ($):", min_value=0.0, value=float(usr_data.get("alcancia", 0.0)), step=5000.0)
         if alcancia_val != usr_data.get("alcancia"):
             usr_data["alcancia"] = alcancia_val
             guardar_json(DATA_FILE, db_data)
-            st.success("Alcancía actualizada y respaldada.")
+            st.success("Alcancía actualizada.")
 
-    # REGISTRO DE INGRESOS EXTRAS
     st.divider()
     st.subheader("💵 Registrar Ingreso Extra / Cobro Adicional")
     with st.form("form_ingreso_extra", clear_on_submit=True):
@@ -257,7 +238,7 @@ if opcion == "💰 Mi Presupuesto & Panel":
                     "monto": monto_ing
                 })
                 guardar_json(DATA_FILE, db_data)
-                st.success("Ingreso extra agregado y respaldado.")
+                st.success("Ingreso extra agregado.")
                 time.sleep(0.3)
                 st.rerun()
 
@@ -305,7 +286,7 @@ if opcion == "💰 Mi Presupuesto & Panel":
         for pf in usr_data["pagos_fijos"]:
             pf["pagado"] = False
         guardar_json(DATA_FILE, db_data)
-        st.success("¡Mes cerrado! Sobrante guardado en la alcancía y respaldado.")
+        st.success("¡Mes cerrado! Sobrante guardado en la alcancía.")
         time.sleep(0.3)
         st.rerun()
 
@@ -313,7 +294,7 @@ if opcion == "💰 Mi Presupuesto & Panel":
         usr_data["gastos_diarios"] = []
         usr_data["ingresos_extras"] = []
         guardar_json(DATA_FILE, db_data)
-        st.success("Gastos e ingresos extras reiniciados y respaldados.")
+        st.success("Gastos e ingresos extras reiniciados.")
         time.sleep(0.3)
         st.rerun()
 
@@ -337,7 +318,7 @@ elif opcion == "📌 Pagos Fijos":
                 "pagado": False
             })
             guardar_json(DATA_FILE, db_data)
-            st.success("Pago fijo agregado y respaldado.")
+            st.success("Pago fijo agregado.")
             time.sleep(0.3)
             st.rerun()
 
@@ -385,7 +366,7 @@ elif opcion == "🛒 Gastos Diarios":
                     "monto": monto
                 })
                 guardar_json(DATA_FILE, db_data)
-                st.success("Gasto registrado y respaldado correctamente.")
+                st.success("Gasto registrado correctamente.")
                 time.sleep(0.3)
                 st.rerun()
 
@@ -405,8 +386,7 @@ elif opcion == "🛒 Gastos Diarios":
 # --- SECCIÓN 4: PREFERENCIAS ---
 elif opcion == "⚙️ Mis Preferencias":
     st.header("⚙️ Opciones de Personalización")
-    st.caption("Ajusta la aplicación según la modalidad que te sea más cómoda.")
-
+    
     st.subheader("🎯 Meta para la Alcancía")
     nom_m = st.text_input("Objetivo de Ahorro (ej. Viaje, Cambio de Auto)", value=usr_data["nombre_meta"])
     val_m = st.number_input("Monto Meta ($):", min_value=0.0, value=float(usr_data["meta_alcancia"]), step=10000.0)
@@ -414,7 +394,7 @@ elif opcion == "⚙️ Mis Preferencias":
         usr_data["nombre_meta"] = nom_m
         usr_data["meta_alcancia"] = val_m
         guardar_json(DATA_FILE, db_data)
-        st.success("Meta actualizada y respaldada.")
+        st.success("Meta actualizada.")
 
     st.divider()
     st.subheader("📊 Presupuesto Máximo por Categoría (Opcional)")
@@ -422,7 +402,6 @@ elif opcion == "⚙️ Mis Preferencias":
     usr_data["usar_presupuestos"] = usar_p
 
     if usar_p:
-        st.info("Ingresa los límites máximos que no deseas superar este mes.")
         cats_def = ["🛒 Supermercado", "💡 Servicios", "🚌 Transporte", "💊 Salud / Estética", "📦 Otros"]
         for c in cats_def:
             val_actual = float(usr_data["presupuestos_cat"].get(c, 0.0))
@@ -431,7 +410,7 @@ elif opcion == "⚙️ Mis Preferencias":
 
     if st.button("Guardar Preferencias"):
         guardar_json(DATA_FILE, db_data)
-        st.success("Preferencias guardadas y respaldadas correctamente.")
+        st.success("Preferencias guardadas.")
 
 # --- SECCIÓN 5: REPORTES Y RESUMEN DE GASTOS ---
 elif opcion == "📊 Reportes & Resumen de Gastos":
@@ -478,9 +457,6 @@ elif opcion == "📊 Reportes & Resumen de Gastos":
         
     m4.metric("🐷 Alcancía de Ahorros", fmt_moneda(tot_alc_rep))
 
-    if saldo_restante_rep < 0:
-        st.error(f"⚠️ **Alerta:** Los gastos superan los ingresos acumulados por un total de {fmt_moneda(abs(saldo_restante_rep))}.")
-
     st.divider()
 
     if gastos_totales_lista:
@@ -505,7 +481,6 @@ elif opcion == "📊 Reportes & Resumen de Gastos":
             buffer = BytesIO()
             doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
             elements = []
-            
             styles = getSampleStyleSheet()
             title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor("#333333"))
             
@@ -548,13 +523,11 @@ elif opcion == "📊 Reportes & Resumen de Gastos":
                 ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)
             ]))
             elements.append(t_det)
-            
             doc.build(elements)
             buffer.seek(0)
             return buffer
 
         col_d1, col_d2 = st.columns(2)
-        
         pdf_data = generar_pdf_1p()
         col_d1.download_button(
             label="📄 Descargar PDF (1 Hoja)",
@@ -613,7 +586,7 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
             if nu and np:
                 usuarios[nu] = np
                 guardar_json(USERS_FILE, usuarios)
-                st.success(f"¡Usuario '{nu}' creado y respaldado exitosamente!")
+                st.success(f"¡Usuario '{nu}' creado con éxito!")
                 time.sleep(0.3)
                 st.rerun()
             else:
@@ -631,7 +604,7 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
                 if n_pass:
                     usuarios[usr_sel] = n_pass
                     guardar_json(USERS_FILE, usuarios)
-                    st.success(f"Contraseña de '{usr_sel}' actualizada y respaldada.")
+                    st.success(f"Contraseña de '{usr_sel}' actualizada.")
                     time.sleep(0.3)
                     st.rerun()
                 else:
@@ -643,7 +616,7 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
                 db_data.pop(usr_sel, None)
                 guardar_json(USERS_FILE, usuarios)
                 guardar_json(DATA_FILE, db_data)
-                st.success(f"Usuario '{usr_sel}' eliminado del sistema y respaldado.")
+                st.success(f"Usuario '{usr_sel}' eliminado del sistema.")
                 time.sleep(0.3)
                 st.rerun()
         else:

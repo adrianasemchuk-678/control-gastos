@@ -1,1 +1,19 @@
-{}
+{
+    "admin": {
+        "ingreso_inicial": 715000.0,
+        "ingresos_extras": [],
+        "alcancia": 0.0,
+        "meta_alcancia": 0.0,
+        "nombre_meta": "Ahorro General",
+        "usar_presupuestos": false,
+        "presupuestos_cat": {},
+        "pagos_fijos": [],
+        "gastos_diarios": [
+            {
+                "fecha": "18/09/2026",
+                "categoria": "📦 Salud / estética",
+                "monto": 10000.0
+            }
+        ]
+    }
+}
