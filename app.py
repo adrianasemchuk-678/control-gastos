@@ -35,7 +35,7 @@ st.markdown("""
         font-weight: 600;
     }
     </style>
-""", unsafe_allow_kwargs=True)
+""", unsafe_allow_html=True)
 
 # PIN constante del Admin
 PIN_ADMIN_CORRECTO = "5861"
@@ -124,7 +124,7 @@ with tab_gastos:
                     <b>{g['concepto']}</b> — ${g['monto']:,.2f}<br>
                     <small>📅 {g['fecha']} | 📁 {g['categoria']} | 👤 {g['usuario']}</small>
                 </div>
-            """, unsafe_allow_kwargs=True)
+            """, unsafe_allow_html=True)
 
 # ==========================================
 # PESTAÑA 2: PAGOS FIJOS Y RECORDATORIOS
@@ -180,7 +180,7 @@ with tab_pagos:
                         <b style="font-size:1.1em;">{p['concepto']}</b> — ${p['monto']:,.2f}<br>
                         <small>📆 Vence el día <b>{p['dia_vencimiento']}</b> | 👤 {p['usuario']}</small>
                     </div>
-                """, unsafe_allow_kwargs=True)
+                """, unsafe_allow_html=True)
                 
                 c_edit, c_del, _ = st.columns([1, 1, 2])
                 with c_edit:
