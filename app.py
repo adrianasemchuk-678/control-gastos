@@ -1,188 +1,241 @@
 import streamlit as st
-import datetime
-import database as db
+import pandas as pd
+import matplotlib.pyplot as plt
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
-st.set_page_config(page_title="Control de Gastos", page_icon="🌷", layout="centered")
+# Configuración inicial de la página
+st.set_page_config(page_title="Control de Gastos & Alcancía", page_icon="🌸", layout="wide")
 
+# Estilos visuales sencillos y amigables
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #FAF6F0;
-        color: #4A3E3D;
-        font-family: 'Segoe UI', Roboto, sans-serif;
-    }
-    div[data-testid="stSidebar"] {
-        background-color: #F3ECE1;
-    }
-    div[data-testid="stForm"] {
-        background-color: #F8F1E7;
-        border-radius: 16px;
-        padding: 16px;
-        border: 1px solid #E5D9CC;
-    }
-    .card-box {
-        background-color: #FFFFFF;
-        border-left: 5px solid #C8A282;
-        padding: 12px;
-        border-radius: 10px;
-        margin-bottom: 10px;
-        box-shadow: 0px 2px 5px rgba(0,0,0,0.03);
-    }
-    .stButton>button {
-        border-radius: 10px;
-        font-weight: 600;
-    }
+    .main { background-color: #FAFAFA; }
+    .stButton>button { background-color: #FFB6C1; color: black; border-radius: 10px; font-weight: bold; }
+    .metric-box { background-color: #FFFFFF; padding: 15px; border-radius: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
     </style>
 """, unsafe_allow_html=True)
 
-PIN_ADMIN_CORRECTO = "5861"
+# Inicializar Variables de Sesión (Memoria de la App)
+if 'ingreso_inicial' not in st.session_state:
+    st.session_state.ingreso_inicial = 0.0
+if 'gastos' not in st.session_state:
+    st.session_state.gastos = []
+if 'pagos_fijos' not in st.session_state:
+    st.session_state.pagos_fijos = []
 
-st.title("🌷 Control de Gastos")
+# Mapeo de Emojis por Categoría
+EMOJIS_CATEGORIAS = {
+    "Supermercado": "🛒",
+    "Servicios / Facturas": "💡",
+    "Alquiler": "🏠",
+    "Comida / Salidas": "🍕",
+    "Transporte": "🚌",
+    "Entretenimiento": "🎮",
+    "Salud / Personal": "💊",
+    "Otros": "📦"
+}
 
-st.sidebar.header("🔑 Acceso y Permisos")
+st.title("🌸 Control de Gastos & Alcancía de Ahorro")
 
-pin_ingresado = st.sidebar.text_input("Código de Acceso / PIN Admin", type="password", help="Ingresa 5861 para modo Administrador")
-es_admin = (pin_ingresado == PIN_ADMIN_CORRECTO)
+# --- SECCIÓN 1: INGRESO MENSUAL ---
+st.sidebar.header("⚙️ Configuración")
+nuevo_ingreso = st.sidebar.number_input("Ingreso / Sueldo del Mes ($):", min_value=0.0, value=st.session_state.ingreso_inicial, step=10000.0)
+st.session_state.ingreso_inicial = nuevo_ingreso
 
-if es_admin:
-    st.sidebar.success("🔓 Modo Administrador Activo")
-else:
-    if pin_ingresado != "":
-        st.sidebar.error("PIN Incorrecto")
-    st.sidebar.info("🔒 Modo Usuario Común")
+# Cálculo del saldo actual
+total_gastos = sum(g['monto'] for g in st.session_state.gastos)
+total_fijos_pagados = sum(p['monto'] for p in st.session_state.pagos_fijos if p['pagado'])
+saldo_restante = st.session_state.ingreso_inicial - total_gastos - total_fijos_pagados
 
-st.sidebar.divider()
+# Muestra de Métricas Principales
+col_m1, col_m2, col_m3 = st.columns(3)
+col_m1.metric("💰 Ingreso Inicial", f"${st.session_state.ingreso_inicial:,.2f}")
+col_m2.metric("💸 Gastos Totales", f"${(total_gastos + total_fijos_pagados):,.2f}")
+col_m3.metric("🟢 Saldo Disponible", f"${saldo_restante:,.2f}")
 
-lista_usuarios = db.obtener_usuarios()
+st.divider()
 
-st.sidebar.subheader("👤 Mi Usuario")
-usuario_activo = st.sidebar.selectbox("¿Quién está usando la app?", lista_usuarios)
+# --- SECCIÓN 2: PAGOS FIJOS Y GASTOS DIARIOS ---
+tab_fijos, tab_gastos, tab_reportes = st.tabs(["📌 Pagos Fijos", "🛒 Gastos Diarios", "📊 Reporte & Exportación"])
 
-with st.sidebar.expander("➕ Crear nuevo usuario"):
-    nuevo_nombre = st.text_input("Nombre de la nueva persona:")
-    if st.button("Guardar Usuario"):
-        if nuevo_nombre.strip():
-            db.agregar_usuario(nuevo_nombre)
-            st.sidebar.success(f"¡Usuario '{nuevo_nombre}' creado!")
+with tab_fijos:
+    st.subheader("📌 Registro de Pagos Fijos")
+    
+    with st.form("form_fijos", clear_on_submit=True):
+        col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
+        concepto_fijo = col_f1.text_input("Concepto (ej. Alquiler, Luz)")
+        monto_fijo = col_f2.number_input("Monto ($)", min_value=0.0, step=1000.0)
+        vencimiento_fijo = col_f3.text_input("Vencimiento (ej. Del 1 al 10)")
+        btn_fijo = st.form_submit_button("Añadir Pago Fijo")
+        
+        if btn_fijo and concepto_fijo and monto_fijo > 0:
+            st.session_state.pagos_fijos.append({
+                "id": len(st.session_state.pagos_fijos),
+                "concepto": concepto_fijo,
+                "monto": monto_fijo,
+                "vencimiento": vencimiento_fijo,
+                "pagado": False
+            })
+            st.success(f"Pago fijo '{concepto_fijo}' agregado correctamente.")
             st.rerun()
 
-if es_admin:
-    st.sidebar.divider()
-    st.sidebar.subheader("👀 Vista Global (Admin)")
-    opciones_filtro = ["Todos"] + lista_usuarios
-    usuario_filtro = st.sidebar.selectbox("Filtrar registros por:", opciones_filtro)
-else:
-    usuario_filtro = usuario_activo
-
-tab_gastos, tab_pagos, tab_admin = st.tabs(["💸 Registrar Gastos", "📅 Pagos Fijos", "⚙️ Ajustes"])
+    # Tabla interactiva de Pagos Fijos
+    if st.session_state.pagos_fijos:
+        st.write("### Mis Compromisos Fijos")
+        for i, pf in enumerate(st.session_state.pagos_fijos):
+            col_pf1, col_pf2, col_pf3, col_pf4, col_pf5 = st.columns([2, 1, 1, 1, 1])
+            col_pf1.write(f"**{pf['concepto']}**")
+            col_pf2.write(f"${pf['monto']:,.2f}")
+            col_pf3.write(f"🗓️ {pf['vencimiento']}")
+            
+            # Botón Marcar Pagado
+            estado_label = "✅ Pagado" if pf['pagado'] else "💳 Marcar Pagado"
+            if col_pf4.button(estado_label, key=f"pag_{i}"):
+                st.session_state.pagos_fijos[i]['pagado'] = not st.session_state.pagos_fijos[i]['pagado']
+                st.rerun()
+                
+            # Botón Eliminar
+            if col_pf5.button("🗑️", key=f"del_pf_{i}"):
+                st.session_state.pagos_fijos.pop(i)
+                st.rerun()
 
 with tab_gastos:
-    st.subheader(f"Registrar Gasto a nombre de: **{usuario_activo}**")
+    st.subheader("🛒 Cargar Gastos Diarios")
     
-    with st.form("form_gasto"):
-        f_fecha = st.date_input("Fecha", datetime.date.today())
-        f_concepto = st.text_input("¿En qué gastaste? (Ej: Panadería, Nafta)")
-        f_monto = st.number_input("Monto ($)", min_value=0.0, step=50.0)
-        f_cat = st.selectbox("Categoría", ["Alimentación", "Transporte", "Servicios", "Salidas / Ocio", "Salud / Deporte", "Otros"])
+    with st.form("form_gastos", clear_on_submit=True):
+        col_g1, col_g2, col_g3 = st.columns([2, 1, 1])
+        cat_gasto = col_g1.selectbox("Categoría", list(EMOJIS_CATEGORIAS.keys()))
+        monto_gasto = col_g2.number_input("Monto ($)", min_value=0.0, step=500.0)
+        fecha_gasto = col_g3.date_input("Fecha")
+        desc_gasto = st.text_input("Detalle corto (opcional)")
+        btn_gasto = st.form_submit_button("Registrar Gasto")
         
-        btn_gasto = st.form_submit_button("Guardar Gasto")
-        if btn_gasto:
-            if f_concepto.strip() and f_monto > 0:
-                db.registrar_gasto(f_fecha, f_concepto, f_monto, f_cat, usuario_activo)
-                st.success("¡Gasto guardado correctamente!")
-                st.rerun()
-            else:
-                st.warning("Completa la descripción y un monto válido.")
-
-    st.divider()
-    
-    st.subheader(f"📋 Mis Gastos ({'Todos' if es_admin and usuario_filtro=='Todos' else usuario_filtro})")
-    gastos = db.obtener_gastos(usuario_filtro)
-    
-    if not gastos:
-        st.info("No hay gastos registrados para este filtro.")
-    else:
-        total_gastado = sum(g["monto"] for g in gastos)
-        st.markdown(f"### **Total:** `${total_gastado:,.2f}`")
-        
-        for g in gastos:
-            st.markdown(f"""
-                <div class="card-box">
-                    <b>{g['concepto']}</b> — ${g['monto']:,.2f}<br>
-                    <small>📅 {g['fecha']} | 📁 {g['categoria']} | 👤 {g['usuario']}</small>
-                </div>
-            """, unsafe_allow_html=True)
-
-with tab_pagos:
-    st.subheader("Pagos Fijos del Mes")
-    
-    with st.expander("➕ Agregar nuevo Pago Fijo", expanded=False):
-        with st.form("form_pago_fijo"):
-            pf_concepto = st.text_input("Nombre del servicio o pago (Ej: Luz, Internet)")
-            pf_monto = st.number_input("Monto aproximado ($)", min_value=0.0, step=100.0)
-            pf_dia = st.number_input("Día de vencimiento (1 al 31)", min_value=1, max_value=31, value=10)
-            
-            if st.form_submit_button("Guardar Pago Fijo"):
-                if pf_concepto.strip():
-                    db.agregar_pago_fijo(pf_concepto, pf_monto, pf_dia, usuario_activo)
-                    st.success("Pago fijo agregado con éxito.")
-                    st.rerun()
-
-    st.divider()
-    
-    pagos = db.obtener_pagos_fijos(usuario_filtro)
-    
-    if not pagos:
-        st.info("No hay pagos fijos registrados.")
-    else:
-        if "edit_id" not in st.session_state:
-            st.session_state.edit_id = None
-
-        for p in pagos:
-            p_id = p["id"]
-            
-            if st.session_state.edit_id == p_id:
-                with st.form(f"edit_pago_{p_id}"):
-                    e_concepto = st.text_input("Concepto", value=p["concepto"])
-                    e_monto = st.number_input("Monto ($)", min_value=0.0, value=float(p["monto"]))
-                    e_dia = st.number_input("Día", min_value=1, max_value=31, value=int(p["dia_vencimiento"]))
-                    
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        if st.form_submit_button("💾 Guardar"):
-                            db.actualizar_pago_fijo(p_id, e_concepto, e_monto, e_dia)
-                            st.session_state.edit_id = None
-                            st.rerun()
-                    with c2:
-                        if st.form_submit_button("❌ Cancelar"):
-                            st.session_state.edit_id = None
-                            st.rerun()
-            else:
-                st.markdown(f"""
-                    <div class="card-box">
-                        <b style="font-size:1.1em;">{p['concepto']}</b> — ${p['monto']:,.2f}<br>
-                        <small>📆 Vence el día <b>{p['dia_vencimiento']}</b> | 👤 {p['usuario']}</small>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                c_edit, c_del, _ = st.columns([1, 1, 2])
-                with c_edit:
-                    if st.button("✏️ Editar", key=f"btn_ed_{p_id}"):
-                        st.session_state.edit_id = p_id
-                        st.rerun()
-                with c_del:
-                    if st.button("🗑️ Eliminar", key=f"btn_del_{p_id}"):
-                        db.eliminar_pago_fijo(p_id)
-                        st.rerun()
-
-with tab_admin:
-    st.subheader("Opciones Avanzadas")
-    
-    if es_admin:
-        st.warning("⚠️ Zona de Mantenimiento (Solo Administrador)")
-        if st.button("🗑️ Borrar datos de prueba", type="primary"):
-            db.borrar_todos_los_datos()
-            st.success("¡Se eliminaron todos los gastos y pagos fijos registrados!")
+        if btn_gasto and monto_gasto > 0:
+            emoji = EMOJIS_CATEGORIAS.get(cat_gasto, "📦")
+            st.session_state.gastos.append({
+                "fecha": fecha_gasto.strftime("%Y-%m-%d"),
+                "categoria": f"{emoji} {cat_gasto}",
+                "detalle": desc_gasto if desc_gasto else cat_gasto,
+                "monto": monto_gasto
+            })
+            st.success("Gasto registrado con éxito.")
             st.rerun()
+
+    # Listado de Gastos
+    if st.session_state.gastos:
+        st.write("### Historial de Gastos")
+        df_gastos = pd.DataFrame(st.session_state.gastos)
+        st.dataframe(df_gastos, use_container_width=True)
+
+with tab_reportes:
+    st.subheader("📊 Reporte Resumido y Descargas")
+    
+    # Preparar Datos Consolidados
+    todos_los_gastos = []
+    for g in st.session_state.gastos:
+        todos_los_gastos.append(g)
+    for pf in st.session_state.pagos_fijos:
+        if pf['pagado']:
+            todos_los_gastos.append({
+                "fecha": "Pago Fijo",
+                "categoria": "💡 Servicios / Facturas",
+                "detalle": pf['concepto'],
+                "monto": pf['monto']
+            })
+
+    if todos_los_gastos:
+        df_totales = pd.DataFrame(todos_los_gastos)
+        
+        # Gráfico por Categoría
+        fig, ax = plt.subplots(figsize=(6, 3))
+        resumen_cat = df_totales.groupby("categoria")["monto"].sum()
+        resumen_cat.plot(kind="pie", autopct="%1.1f%%", ax=ax, colors=['#FFB6C1', '#87CEFA', '#98FB98', '#DDA0DD', '#F0E68C'])
+        ax.set_ylabel("")
+        ax.set_title("Distribución de Gastos")
+        st.pyplot(fig)
+
+        # Función para generar el PDF de una sola página
+        def generar_pdf():
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+            elements = []
+            
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor("#333333"))
+            
+            elements.append(Paragraph("🌸 Resumen Mensual de Control de Gastos", title_style))
+            elements.append(Spacer(1, 10))
+            
+            # Tabla de Resumen
+            data_resumen = [
+                ["Ingreso Inicial", f"${st.session_state.ingreso_inicial:,.2f}"],
+                ["Gastos Totales", f"${(total_gastos + total_fijos_pagados):,.2f}"],
+                ["Saldo Restante", f"${saldo_restante:,.2f}"]
+            ]
+            t_resumen = Table(data_resumen, colWidths=[200, 200])
+            t_resumen.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#FFF0F5")),
+                ('TEXTCOLOR', (0,0), (-1,-1), colors.black),
+                ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+                ('GRID', (0,0), (-1,-1), 1, colors.white)
+            ]))
+            elements.append(t_resumen)
+            elements.append(Spacer(1, 15))
+            
+            # Guardar imagen del gráfico en PDF
+            img_buf = BytesIO()
+            fig.savefig(img_buf, format='png', bbox_inches='tight')
+            img_buf.seek(0)
+            elements.append(Image(img_buf, width=300, height=150))
+            elements.append(Spacer(1, 15))
+
+            # Tabla de Gastos
+            data_tabla = [["Fecha", "Categoría", "Detalle", "Monto"]]
+            for item in todos_los_gastos:
+                data_tabla.append([item["fecha"], item["categoria"], item["detalle"], f"${item['monto']:,.2f}"])
+                
+            t_detalle = Table(data_tabla, colWidths=[80, 150, 170, 80])
+            t_detalle.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#FFB6C1")),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)
+            ]))
+            elements.append(t_detalle)
+            
+            doc.build(elements)
+            buffer.seek(0)
+            return buffer
+
+        # Botones de Descarga
+        col_d1, col_d2 = st.columns(2)
+        
+        # Descarga PDF
+        pdf_bytes = generar_pdf()
+        col_d1.download_button(
+            label="📄 Descargar Resumen en PDF",
+            data=pdf_bytes,
+            file_name="resumen_gastos.pdf",
+            mime="application/pdf"
+        )
+        
+        # Descarga Excel
+        excel_buffer = BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            df_totales.to_excel(writer, index=False, sheet_name='Gastos')
+        excel_buffer.seek(0)
+        
+        col_d2.download_button(
+            label="📊 Descargar Excel",
+            data=excel_buffer,
+            file_name="gastos.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     else:
-        st.info("🔒 Necesitas ingresar el PIN de Administrador (5861) en la barra lateral para acceder a esta sección.")
+        st.info("Agrega gastos o pagos fijos para habilitar el reporte y las descargas.")
