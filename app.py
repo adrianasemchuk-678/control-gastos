@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import time
 import matplotlib.pyplot as plt
 from datetime import datetime
 from io import BytesIO
@@ -20,7 +21,6 @@ st.markdown("""
     .main { background-color: #FAFAFA; }
     .stButton>button { background-color: #FFB6C1; color: black; border-radius: 10px; font-weight: bold; }
     
-    /* ENCABEZADO DE MARCA ADRIANA SEMCHUK */
     .brand-header {
         display: flex;
         align-items: center;
@@ -88,7 +88,6 @@ if "usuario_actual" not in st.session_state:
     st.session_state["usuario_actual"] = None
 
 if st.session_state["usuario_actual"] is None:
-    # Insignia en pantalla de inicio de sesión
     st.markdown("""
         <div class="brand-header">
             <div class="brand-logo">AS</div>
@@ -107,6 +106,7 @@ if st.session_state["usuario_actual"] is None:
             if user_input in usuarios and usuarios[user_input] == pass_input:
                 st.session_state["usuario_actual"] = user_input
                 st.success(f"¡Bienvenido/a {user_input}!")
+                time.sleep(0.5)
                 st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos.")
@@ -140,7 +140,6 @@ MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto
 hoy = datetime.now()
 nombre_mes_actual = f"{MESES[hoy.month - 1]} {hoy.year}"
 
-# CÁPSULA Y MARCA DE ADRIANA SEMCHUK EN PANEL PRINCIPAL
 st.markdown(f"""
     <div class="brand-header">
         <div class="brand-logo">AS</div>
@@ -482,11 +481,11 @@ elif opcion == "📊 Reportes & Exportaciones":
     else:
         st.info("No hay información suficiente registrada este mes para exportar.")
 
-# --- SECCIÓN 6: GESTIÓN DE USUARIOS (ADMIN) ---
+# --- SECCIÓN 6: GESTIÓN DE USUARIOS (ADMINISTRADORA) ---
 elif opcion == "👥 Gestión de Usuarios" and es_admin:
-    st.header("👥 Gestión y Control Global de Usuarios")
+    st.header("👑 Control y Administración Global de Usuarios")
     
-    st.subheader("Tabla Resumen de Todos los Usuarios")
+    st.subheader("📊 Tabla Resumen de Usuarios Registrados")
     resumen_admin = []
     for u, udata in db_data.items():
         tot_f = sum(pf["monto"] for pf in udata.get("pagos_fijos", []) if pf["pagado"])
@@ -503,14 +502,71 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
     st.dataframe(pd.DataFrame(resumen_admin), use_container_width=True)
 
     st.divider()
-    st.subheader("Crear un Nuevo Usuario")
-    nu = st.text_input("Nuevo Usuario")
-    np = st.text_input("Contraseña", type="password")
-    if st.button("Crear Usuario"):
-        if nu and np:
-            usuarios[nu] = np
-            guardar_json(USERS_FILE, usuarios)
-            st.success(f"Usuario '{nu}' creado exitosamente.")
-            st.rerun()
+    tab_crear, tab_modificar, tab_ver = st.tabs(["➕ Crear Usuario", "🔑 Modificar / Eliminar", "🔍 Inspeccionar Datos"])
+
+    with tab_crear:
+        st.subheader("Crear un nuevo usuario")
+        nu = st.text_input("Nombre del Nuevo Usuario", key="new_u")
+        np = st.text_input("Contraseña Asignada", type="password", key="new_p")
+        if st.button("Guardar y Crear Usuario"):
+            if nu and np:
+                usuarios[nu] = np
+                guardar_json(USERS_FILE, usuarios)
+                st.success(f"¡Usuario '{nu}' creado exitosamente!")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.warning("Completa el usuario y la contraseña.")
+
+    with tab_modificar:
+        st.subheader("Gestión de Credenciales")
+        lista_mod = [u for u in usuarios.keys() if u != "admin"]
+        if lista_mod:
+            usr_sel = st.selectbox("Selecciona un usuario a gestionar:", lista_mod)
+            
+            c_pass1, c_pass2 = st.columns(2)
+            n_pass = c_pass1.text_input("Nueva Contraseña", type="password")
+            if c_pass2.button("🔑 Actualizar Contraseña"):
+                if n_pass:
+                    usuarios[usr_sel] = n_pass
+                    guardar_json(USERS_FILE, usuarios)
+                    st.success(f"Contraseña de '{usr_sel}' actualizada.")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.warning("Ingresa una contraseña válida.")
+
+            st.divider()
+            if st.button(f"🗑️ Eliminar Usuario '{usr_sel}'", type="secondary"):
+                usuarios.pop(usr_sel, None)
+                db_data.pop(usr_sel, None)
+                guardar_json(USERS_FILE, usuarios)
+                guardar_json(DATA_FILE, db_data)
+                st.success(f"Usuario '{usr_sel}' eliminado del sistema.")
+                time.sleep(0.5)
+                st.rerun()
         else:
-            st.warning("Completa usuario y contraseña.")
+            st.info("No hay otros usuarios registrados además de la administradora.")
+
+    with tab_ver:
+        st.subheader("🔍 Supervisar Gastos por Perfil de Usuario")
+        lista_insp = list(db_data.keys())
+        if lista_insp:
+            u_inspect = st.selectbox("Elegir usuario para revisar sus movimientos:", lista_insp)
+            u_info = db_data[u_inspect]
+            
+            col_u1, col_u2 = st.columns(2)
+            col_u1.metric("Ingreso Registrado", fmt_moneda(u_info.get("ingreso_inicial", 0.0)))
+            col_u2.metric("Alcancía Acumulada", fmt_moneda(u_info.get("alcancia", 0.0)))
+
+            st.write("📌 **Pagos Fijos:**")
+            if u_info.get("pagos_fijos"):
+                st.dataframe(pd.DataFrame(u_info["pagos_fijos"]), use_container_width=True)
+            else:
+                st.caption("Sin pagos fijos registrados.")
+
+            st.write("🛒 **Gastos Diarios:**")
+            if u_info.get("gastos_diarios"):
+                st.dataframe(pd.DataFrame(u_info["gastos_diarios"]), use_container_width=True)
+            else:
+                st.caption("Sin gastos diarios registrados.")

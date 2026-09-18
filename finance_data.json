@@ -6,15 +6,20 @@
                 "concepto": "📦 Internet",
                 "monto": 500000.0,
                 "vencimiento": "10",
-                "pagado": true
+                "pagado": false
             }
         ],
         "gastos_diarios": [
             {
                 "fecha": "18/09/2026",
-                "categoria": "🛒 Supermercado",
-                "monto": 5000.0
+                "categoria": "📦 Salud / estética",
+                "monto": 50000.0
             }
-        ]
+        ],
+        "alcancia": 99500000.0,
+        "meta_alcancia": 0.0,
+        "nombre_meta": "Ahorro General",
+        "usar_presupuestos": false,
+        "presupuestos_cat": {}
     }
 }
