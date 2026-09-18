@@ -1,0 +1,20 @@
+{
+    "admin": {
+        "ingreso_inicial": 100000000.0,
+        "pagos_fijos": [
+            {
+                "concepto": "📦 Internet",
+                "monto": 500000.0,
+                "vencimiento": "10",
+                "pagado": true
+            }
+        ],
+        "gastos_diarios": [
+            {
+                "fecha": "18/09/2026",
+                "categoria": "🛒 Supermercado",
+                "monto": 5000.0
+            }
+        ]
+    }
+}
