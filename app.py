@@ -1,779 +1,208 @@
-"""
-Aplicación Streamlit: Control de Gastos Mensuales
-Diseño súper fácil e intuitivo (para niños de 10 años o personas sin experiencia en computación).
-Acceso con calculadora y bienvenida de Adriana (Código 5861).
-Incluye pagos fijos con fechas de vencimiento (ej: del 1 al 10), alertas y recordatorios automáticos.
-Estética pastel en tonos rosados.
-"""
-
 import streamlit as st
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, date
+import datetime
 import database as db
-import categories as cat
-import excel_generator as eg
 
-# Configuración inicial de la página
-st.set_page_config(
-    page_title="Control de Gastos de Adriana 🌸",
-    page_icon="🧮",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# Configuración adaptable a pantallas de celulares
+st.set_page_config(page_title="Control de Gastos", page_icon="🌷", layout="centered")
 
-# Inicializar Base de Datos
-db.init_db()
-
-# Inyección de CSS Personalizado: Letras grandes, botones claros y diseño pastel
+# Estilo Nude (tonos crema, beige y café suave)
 st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-    }
-    
-    /* Fondo general suave */
+    <style>
     .stApp {
-        background: linear-gradient(180deg, #fff5f7 0%, #fef0f4 50%, #fff7f9 100%);
-        color: #3d2b35;
+        background-color: #FAF6F0;
+        color: #4A3E3D;
+        font-family: 'Segoe UI', Roboto, sans-serif;
     }
-    
-    /* Botones Gigantes Principales */
-    button[kind="primary"] {
-        background: linear-gradient(135deg, #ff6584 0%, #ff8da1 100%) !important;
-        color: #ffffff !important;
-        border: none !important;
-        border-radius: 28px !important;
-        font-weight: 800 !important;
-        font-size: 1.15rem !important;
-        padding: 0.75rem 2rem !important;
-        box-shadow: 0 6px 18px rgba(255, 101, 132, 0.4) !important;
-        transition: all 0.25s ease !important;
+    div[data-testid="stSidebar"] {
+        background-color: #F3ECE1;
     }
-    button[kind="primary"]:hover {
-        transform: translateY(-2px) scale(1.02) !important;
-        box-shadow: 0 8px 24px rgba(255, 101, 132, 0.55) !important;
+    div[data-testid="stForm"] {
+        background-color: #F8F1E7;
+        border-radius: 16px;
+        padding: 16px;
+        border: 1px solid #E5D9CC;
     }
-    
-    /* Botones Secundarios Claros */
-    button[kind="secondary"] {
-        background: #ffffff !important;
-        color: #be123c !important;
-        border: 2px solid #fecdd3 !important;
-        border-radius: 20px !important;
-        font-weight: 700 !important;
-        font-size: 1rem !important;
-        padding: 0.6rem 1.4rem !important;
-        box-shadow: 0 2px 8px rgba(244, 114, 182, 0.12) !important;
-        transition: all 0.25s ease !important;
+    .card-box {
+        background-color: #FFFFFF;
+        border-left: 5px solid #C8A282;
+        padding: 12px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        box-shadow: 0px 2px 5px rgba(0,0,0,0.03);
     }
-    button[kind="secondary"]:hover {
-        background: #fff1f2 !important;
-        border-color: #fb7185 !important;
-        transform: translateY(-1px) !important;
+    .stButton>button {
+        border-radius: 10px;
+        font-weight: 600;
     }
-    
-    /* Caja de Bienvenida con Calculadora */
-    .calc-welcome-card {
-        background: #ffffff;
-        border: 2.5px solid #fbcfe8;
-        border-radius: 30px;
-        padding: 40px 32px;
-        box-shadow: 0 16px 36px rgba(244, 114, 182, 0.18);
-        text-align: center;
-        max-width: 440px;
-        margin: 40px auto 20px auto;
-    }
-    
-    /* Icono Calculadora Estético */
-    .calc-icon-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 90px;
-        height: 90px;
-        background: linear-gradient(135deg, #ffe4e6 0%, #fed7aa 100%);
-        border: 3px solid #ff758c;
-        border-radius: 26px;
-        font-size: 3.2rem;
-        box-shadow: 0 8px 20px rgba(255, 117, 140, 0.25);
-        margin-bottom: 16px;
-    }
-    
-    /* Tarjetas de Resumen Grandes */
-    .resumen-card {
-        border-radius: 22px;
-        padding: 22px 24px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
-        border: 2px solid rgba(255, 255, 255, 0.9);
-        text-align: center;
-    }
-    .resumen-titulo {
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: #475569;
-        margin-bottom: 6px;
-    }
-    .resumen-monto {
-        font-size: 2.2rem;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-    }
-    .resumen-subtexto {
-        font-size: 0.95rem;
-        font-weight: 700;
-        margin-top: 6px;
-        display: inline-block;
-        padding: 3px 12px;
-        border-radius: 12px;
-    }
-    
-    /* Tarjetas de Alertas de Vencimiento */
-    .alerta-card {
-        border-radius: 18px;
-        padding: 16px 20px;
-        margin-bottom: 14px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .alerta-vencido {
-        background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%);
-        border-left: 6px solid #e11d48;
-    }
-    .alerta-por-vencer {
-        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-        border-left: 6px solid #f59e0b;
-    }
-    .alerta-pagado {
-        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-        border-left: 6px solid #16a34a;
-    }
-    
-    /* Pasos sencillos numerados */
-    .paso-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 38px;
-        height: 38px;
-        background: #ff6584;
-        color: #ffffff;
-        font-size: 1.2rem;
-        font-weight: 800;
-        border-radius: 50%;
-        margin-right: 10px;
-    }
-    
-    .paso-titulo {
-        font-size: 1.4rem;
-        font-weight: 800;
-        color: #4a2d3b;
-        display: flex;
-        align-items: center;
-        margin-bottom: 12px;
-    }
-    
-    input {
-        font-size: 1.1rem !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+    </style>
+""", unsafe_allow_kwargs=True)
 
-# ----------------- PANTALLA DE ENTRADA CON CALCULADORA Y BIENVENIDA DE ADRIANA -----------------
-if "desbloqueado" not in st.session_state:
-    st.session_state.desbloqueado = False
+# PIN constante del Admin
+PIN_ADMIN_CORRECTO = "5861"
 
-if not st.session_state.desbloqueado:
-    col_c1, col_c2, col_c3 = st.columns([1, 1.4, 1])
-    with col_c2:
-        st.write("")
-        st.markdown("""
-        <div class="calc-welcome-card">
-            <div class="calc-icon-badge">🧮</div>
-            <h2 style="color: #be123c; margin-top: 4px; margin-bottom: 6px; font-weight: 800; font-size: 1.7rem;">
-                🌸 Adriana te da la bienvenida 🌸
-            </h2>
-            <p style="color: #64748b; font-size: 1.05rem; margin-bottom: 16px;">
-                Ingresá tu código para ver y anotar tus gastos de forma fácil.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+st.title("🌷 Control de Gastos")
+
+# --- BARRA LATERAL (PERMISOS Y USUARIOS) ---
+st.sidebar.header("🔑 Acceso y Permisos")
+
+pin_ingresado = st.sidebar.text_input("Código de Acceso / PIN Admin", type="password", help="Ingresa 5861 para modo Administrador")
+es_admin = (pin_ingresado == PIN_ADMIN_CORRECTO)
+
+if es_admin:
+    st.sidebar.success("🔓 Modo Administrador Activo")
+else:
+    if pin_ingresado != "":
+        st.sidebar.error("PIN Incorrecto")
+    st.sidebar.info("🔒 Modo Usuario Común")
+
+st.sidebar.divider()
+
+# Cargar lista dinámica de usuarios
+lista_usuarios = db.obtener_usuarios()
+
+# Selección de Usuario Actual
+st.sidebar.subheader("👤 Mi Usuario")
+usuario_activo = st.sidebar.selectbox("¿Quién está usando la app?", lista_usuarios)
+
+# Opción para agregar nuevo usuario
+with st.sidebar.expander("➕ Crear nuevo usuario"):
+    nuevo_nombre = st.text_input("Nombre de la nueva persona:")
+    if st.button("Guardar Usuario"):
+        if nuevo_nombre.strip():
+            db.agregar_usuario(nuevo_nombre)
+            st.sidebar.success(f"¡Usuario '{nuevo_nombre}' creado!")
+            st.rerun()
+
+# Filtro de visualización (Solo activo si es Administrador)
+if es_admin:
+    st.sidebar.divider()
+    st.sidebar.subheader("👀 Vista Global (Admin)")
+    opciones_filtro = ["Todos"] + lista_usuarios
+    usuario_filtro = st.sidebar.selectbox("Filtrar registros por:", opciones_filtro)
+else:
+    # El usuario común solo ve sus propios datos
+    usuario_filtro = usuario_activo
+
+# --- PESTAÑAS PRINCIPALES ---
+tab_gastos, tab_pagos, tab_admin = st.tabs(["💸 Registrar Gastos", "📅 Pagos Fijos", "⚙️ Ajustes"])
+
+# ==========================================
+# PESTAÑA 1: GASTOS DIARIOS
+# ==========================================
+with tab_gastos:
+    st.subheader(f"Registrar Gasto a nombre de: **{usuario_activo}**")
+    
+    with st.form("form_gasto"):
+        f_fecha = st.date_input("Fecha", datetime.date.today())
+        f_concepto = st.text_input("¿En qué gastaste? (Ej: Panadería, Nafta)")
+        f_monto = st.number_input("Monto ($)", min_value=0.0, step=50.0)
+        f_cat = st.selectbox("Categoría", ["Alimentación", "Transporte", "Servicios", "Salidas / Ocio", "Salud / Deporte", "Otros"])
         
-        with st.form("form_bienvenida_adriana"):
-            codigo_ingreso = st.text_input(
-                "🔑 Escribí el código de 4 números aquí:",
-                type="password",
-                placeholder="Por ejemplo: 5861",
-                help="El código es 5861"
-            )
-            btn_entrar = st.form_submit_button("✨ ENTRAR A MIS CUENTAS ✨", type="primary", use_container_width=True)
+        btn_gasto = st.form_submit_button("Guardar Gasto")
+        if btn_gasto:
+            if f_concepto.strip() and f_monto > 0:
+                db.registrar_gasto(f_fecha, f_concepto, f_monto, f_cat, usuario_activo)
+                st.success("¡Gasto guardado correctamente!")
+                st.rerun()
+            else:
+                st.warning("Completa la descripción y un monto válido.")
+
+    st.divider()
+    
+    st.subheader(f"📋 Mis Gastos ({'Todos' if es_admin and usuario_filtro=='Todos' else usuario_filtro})")
+    gastos = db.obtener_gastos(usuario_filtro)
+    
+    if not gastos:
+        st.info("No hay gastos registrados para este filtro.")
+    else:
+        total_gastado = sum(g["monto"] for g in gastos)
+        st.markdown(f"### **Total:** `${total_gastado:,.2f}`")
+        
+        for g in gastos:
+            st.markdown(f"""
+                <div class="card-box">
+                    <b>{g['concepto']}</b> — ${g['monto']:,.2f}<br>
+                    <small>📅 {g['fecha']} | 📁 {g['categoria']} | 👤 {g['usuario']}</small>
+                </div>
+            """, unsafe_allow_kwargs=True)
+
+# ==========================================
+# PESTAÑA 2: PAGOS FIJOS Y RECORDATORIOS
+# ==========================================
+with tab_pagos:
+    st.subheader("Pagos Fijos del Mes")
+    
+    with st.expander("➕ Agregar nuevo Pago Fijo", expanded=False):
+        with st.form("form_pago_fijo"):
+            pf_concepto = st.text_input("Nombre del servicio o pago (Ej: Luz, Internet)")
+            pf_monto = st.number_input("Monto aproximado ($)", min_value=0.0, step=100.0)
+            pf_dia = st.number_input("Día de vencimiento (1 al 31)", min_value=1, max_value=31, value=10)
             
-            if btn_entrar:
-                if db.verificar_codigo_acceso(codigo_ingreso):
-                    st.session_state.desbloqueado = True
-                    st.success("¡Código correcto! Entrando... ✨")
-                    st.rerun()
-                else:
-                    st.error("❌ El código no es correcto. Acordate que es 5861. ¡Probá de nuevo!")
-
-    st.stop()
-
-# ----------------- DENTRO DE LA APLICACIÓN -----------------
-
-def fmt_pesos(num):
-    return f"${num:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
-
-hoy = date.today()
-nombres_meses = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-]
-mes_nombre_actual = nombres_meses[hoy.month - 1]
-anio_actual = hoy.year
-
-# Barra superior clara
-col_top1, col_top2 = st.columns([3, 1])
-with col_top1:
-    st.title("🧮 Mis Cuentas Fáciles")
-    st.markdown(f"🌸 ¡Hola! Estamos viendo tus cuentas de **{mes_nombre_actual} de {anio_actual}**")
-with col_top2:
-    st.write("")
-    if st.button("🔒 Salir / Cerrar", type="secondary", use_container_width=True):
-        st.session_state.desbloqueado = False
-        st.rerun()
-
-st.write("")
-
-# ----------------- PASO 1: TU DINERO (SUELDO O PLATA DEL MES) -----------------
-sueldo_guardado = float(db.get_setting("sueldo_mensual", "350000"))
-
-with st.container():
-    st.markdown("""
-    <div class="paso-titulo">
-        <span class="paso-badge">1</span> ¿Cuánta plata tenés este mes?
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col_s1, col_s2 = st.columns([3, 1.5])
-    with col_s1:
-        sueldo_nuevo = st.number_input(
-            "Escribí acá cuánto dinero tenés en total (tu sueldo o plata ahorrada):",
-            min_value=0.0,
-            value=sueldo_guardado,
-            step=10000.0,
-            format="%.2f"
-        )
-    with col_s2:
-        st.write("")
-        st.write("")
-        if st.button("💾 Guardar este dinero", type="primary", use_container_width=True):
-            db.set_setting("sueldo_mensual", str(sueldo_nuevo))
-            st.success("¡Listo! Ya quedó guardado cuánto dinero tenés. 🌸")
-            st.rerun()
-
-st.write("")
-
-# ----------------- PASO 2: EL RESUMEN CLARO (CÓMO VENÍS) -----------------
-gastos_lista = db.get_expenses(mes=hoy.month, anio=anio_actual)
-df_gastos = pd.DataFrame(gastos_lista)
-
-total_gastos = df_gastos["monto"].sum() if not df_gastos.empty else 0.0
-plata_restante = sueldo_guardado - total_gastos
-
-st.markdown("""
-<div class="paso-titulo">
-    <span class="paso-badge">2</span> ¿Cómo venís con tu dinero?
-</div>
-""", unsafe_allow_html=True)
-
-col_r1, col_r2, col_r3 = st.columns(3)
-
-with col_r1:
-    st.markdown(f"""
-    <div class="resumen-card" style="background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%); border-color: #7dd3fc;">
-        <div class="resumen-titulo">💵 TU DINERO INICIAL</div>
-        <div class="resumen-monto" style="color: #0369a1;">{fmt_pesos(sueldo_guardado)}</div>
-        <div class="resumen-subtexto" style="background: #bae6fd; color: #075985;">Total disponible</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_r2:
-    st.markdown(f"""
-    <div class="resumen-card" style="background: linear-gradient(135deg, #ffe4e6 0%, #fff1f2 100%); border-color: #fca5a5;">
-        <div class="resumen-titulo">💸 LO QUE YA GASTASTE</div>
-        <div class="resumen-monto" style="color: #be123c;">{fmt_pesos(total_gastos)}</div>
-        <div class="resumen-subtexto" style="background: #fecdd3; color: #9f1239;">Gastos anotados</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_r3:
-    color_fondo_saldo = "#f0fdf4" if plata_restante >= 0 else "#fef2f2"
-    color_borde_saldo = "#86efac" if plata_restante >= 0 else "#f87171"
-    color_texto_saldo = "#15803d" if plata_restante >= 0 else "#b91c1c"
-    mensaje_saldo = "¡Te queda en el bolsillo!" if plata_restante >= 0 else "¡Ojo, gastaste de más!"
-    
-    st.markdown(f"""
-    <div class="resumen-card" style="background: {color_fondo_saldo}; border-color: {color_borde_saldo};">
-        <div class="resumen-titulo">🐷 PLATA QUE TE QUEDA</div>
-        <div class="resumen-monto" style="color: {color_texto_saldo};">{fmt_pesos(plata_restante)}</div>
-        <div class="resumen-subtexto" style="background: {'#bbf7d0' if plata_restante >= 0 else '#fecaca'}; color: {color_texto_saldo};">
-            {mensaje_saldo}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.write("")
-
-# ----------------- PASO 3: PAGOS FIJOS Y VENCIMIENTOS (DEL 1 AL 10) -----------------
-st.markdown("""
-<div class="paso-titulo">
-    <span class="paso-badge">3</span> 🔔 Pagos fijos del mes y recordatorios de vencimiento
-</div>
-""", unsafe_allow_html=True)
-
-st.caption("Aquí ves los pagos que tenés todos los meses (como alquiler, luz, internet). La app te avisa si están por vencer o si todavía no los pagaste.")
-
-# Obtener estado de los pagos fijos para este mes
-estados_pagos = db.get_estado_pagos_fijos(hoy.month, anio_actual)
-
-# Revisar si hay alguno pendiente o vencido
-pagos_pendientes = [p for p in estados_pagos if not p["pagado"]]
-pagos_vencidos = [p for p in estados_pagos if p["estado"] == "vencido"]
-
-if pagos_vencidos:
-    st.error(f"🚨 **¡Atención! Hay {len(pagos_vencidos)} pago(s) que ya vencieron este mes y todavía no figuran como pagados.** Mirá la lista abajo:")
-
-if not estados_pagos:
-    st.info("💡 Todavía no registraste ningún pago fijo. Hacé clic abajo en **'¿Querés agregar otro pago fijo para que te recuerde todos los meses?'** para cargar el primero (ej: Alquiler, Luz, Internet o Netflix).")
-
-for pago in estados_pagos:
-    p_id = pago["id"]
-    nombre = pago["nombre"]
-    monto = pago["monto"]
-    d_desde = pago["dia_desde"]
-    d_hasta = pago["dia_hasta"]
-    icono = pago["icono"]
-    estado = pago["estado"]
-
-    col_box, col_accion = st.columns([3.5, 1.5])
-
-    with col_box:
-        if estado == "pagado":
-            st.markdown(f"""
-            <div class="alerta-card alerta-pagado">
-                <div>
-                    <span style="font-size: 1.4rem;">{icono}</span>
-                    <strong style="font-size: 1.1rem; color: #166534; margin-left: 6px;">{nombre}</strong>
-                    <span style="color: #15803d; font-weight: 700; margin-left: 10px;">{fmt_pesos(monto)}</span>
-                    <br><small style="color: #166534; margin-left: 30px;">✅ ¡Pagado este mes! Ya está restado de tus cuentas.</small>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        elif estado == "vencido":
-            st.markdown(f"""
-            <div class="alerta-card alerta-vencido">
-                <div>
-                    <span style="font-size: 1.4rem;">🚨</span>
-                    <strong style="font-size: 1.1rem; color: #9f1239; margin-left: 6px;">{nombre}</strong>
-                    <span style="color: #be123c; font-weight: 800; margin-left: 10px;">{fmt_pesos(monto)}</span>
-                    <br><small style="color: #b91c1c; margin-left: 30px; font-weight: 700;">
-                        ⚠️ Vencía el día {d_hasta}. ¡Todavía no lo pagaste!
-                    </small>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        elif estado == "por_vencer":
-            st.markdown(f"""
-            <div class="alerta-card alerta-por-vencer">
-                <div>
-                    <span style="font-size: 1.4rem;">⏰</span>
-                    <strong style="font-size: 1.1rem; color: #92400e; margin-left: 6px;">{nombre}</strong>
-                    <span style="color: #b45309; font-weight: 800; margin-left: 10px;">{fmt_pesos(monto)}</span>
-                    <br><small style="color: #78350f; margin-left: 30px;">
-                        📅 Se paga del {d_desde} al {d_hasta}. ¡Es momento de pagarlo!
-                    </small>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="alerta-card" style="background: #f8fafc; border-left: 6px solid #94a3b8;">
-                <div>
-                    <span style="font-size: 1.4rem;">{icono}</span>
-                    <strong style="font-size: 1.1rem; color: #334155; margin-left: 6px;">{nombre}</strong>
-                    <span style="color: #475569; font-weight: 700; margin-left: 10px;">{fmt_pesos(monto)}</span>
-                    <br><small style="color: #64748b; margin-left: 30px;">Próximo a vencer: se paga del {d_desde} al {d_hasta}.</small>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    with col_accion:
-        st.write("")
-        if not pago["pagado"]:
-            if st.button("✅ Ya lo pagué", key=f"btn_pagar_{p_id}", type="primary", use_container_width=True):
-                db.marcar_pago_fijo_como_pagado(p_id, hoy.month, anio_actual)
-                st.success(f"¡Genial! Anotamos el pago de {nombre} por {fmt_pesos(monto)}.")
-                st.rerun()
-        else:
-            st.markdown("<div style='color: #16a34a; font-weight: 800; text-align: center; padding: 4px 0; font-size: 1.05rem;'>✔️ Al día</div>", unsafe_allow_html=True)
-
-        col_ed, col_el = st.columns(2)
-        with col_ed:
-            if st.button("✏️ Editar", key=f"btn_edit_{p_id}", type="secondary", use_container_width=True):
-                st.session_state[f"editando_pf_{p_id}"] = not st.session_state.get(f"editando_pf_{p_id}", False)
-                st.session_state[f"borrando_pf_{p_id}"] = False
-                st.rerun()
-        with col_el:
-            if st.button("🗑️ Eliminar", key=f"btn_elim_{p_id}", type="secondary", use_container_width=True):
-                st.session_state[f"borrando_pf_{p_id}"] = not st.session_state.get(f"borrando_pf_{p_id}", False)
-                st.session_state[f"editando_pf_{p_id}"] = False
-                st.rerun()
-
-    # Formulario desplegable para EDITAR
-    if st.session_state.get(f"editando_pf_{p_id}", False):
-        st.markdown(f"""
-        <div style="background: #ffffff; border: 2px solid #f472b6; border-radius: 18px; padding: 18px 22px; margin-top: -6px; margin-bottom: 16px; box-shadow: 0 4px 14px rgba(244, 114, 182, 0.12);">
-            <div style="font-weight: 800; font-size: 1.1rem; color: #be123c; margin-bottom: 10px;">
-                ✏️ Modificar pago fijo: <span style="color: #4a2d3b;">{nombre}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        with st.form(key=f"form_editar_pf_{p_id}"):
-            col_ed1, col_ed2, col_ed3 = st.columns([3, 2, 2])
-            with col_ed1:
-                edit_nombre = st.text_input("Concepto / Nombre del pago:", value=nombre, key=f"input_nom_{p_id}")
-            with col_ed2:
-                edit_monto = st.number_input("Monto ($):", min_value=0.0, value=float(monto), step=1000.0, format="%.2f", key=f"input_mto_{p_id}")
-            with col_ed3:
-                cats = cat.get_categories_list()
-                cat_actual = pago.get("categoria", "🏠 Alquiler & Hogar")
-                idx_cat = cats.index(cat_actual) if cat_actual in cats else 0
-                edit_cat = st.selectbox("Categoría:", options=cats, index=idx_cat, key=f"input_cat_{p_id}")
-
-            col_dd1, col_dd2 = st.columns(2)
-            with col_dd1:
-                edit_dia_desde = st.number_input("Día desde que se puede pagar:", min_value=1, max_value=31, value=int(d_desde), key=f"input_dd_{p_id}")
-            with col_dd2:
-                edit_dia_hasta = st.number_input("Día de vencimiento límite (hasta qué día):", min_value=1, max_value=31, value=int(d_hasta), key=f"input_dh_{p_id}")
-
-            col_sub_g, col_sub_c = st.columns(2)
-            with col_sub_g:
-                btn_guardar_edit = st.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True)
-            with col_sub_c:
-                btn_cancel_edit = st.form_submit_button("❌ Cancelar", type="secondary", use_container_width=True)
-
-            if btn_guardar_edit:
-                if not edit_nombre.strip():
-                    st.error("⚠️ El concepto o nombre no puede estar vacío.")
-                elif edit_monto <= 0:
-                    st.error("⚠️ El monto debe ser mayor a cero.")
-                elif edit_dia_desde > edit_dia_hasta:
-                    st.error("⚠️ El día de inicio no puede ser mayor al día de vencimiento.")
-                else:
-                    nuevo_ico = cat.get_category_icon(edit_cat)
-                    db.update_pago_fijo(
-                        pago_fijo_id=p_id,
-                        nombre=edit_nombre.strip(),
-                        monto=edit_monto,
-                        categoria=edit_cat,
-                        icono=nuevo_ico,
-                        dia_desde=edit_dia_desde,
-                        dia_hasta=edit_dia_hasta
-                    )
-                    st.session_state[f"editando_pf_{p_id}"] = False
-                    st.success(f"¡Pago fijo '{edit_nombre.strip()}' actualizado correctamente! 🌸")
+            if st.form_submit_button("Guardar Pago Fijo"):
+                if pf_concepto.strip():
+                    db.agregar_pago_fijo(pf_concepto, pf_monto, pf_dia, usuario_activo)
+                    st.success("Pago fijo agregado con éxito.")
                     st.rerun()
 
-            if btn_cancel_edit:
-                st.session_state[f"editando_pf_{p_id}"] = False
-                st.rerun()
+    st.divider()
+    
+    pagos = db.obtener_pagos_fijos(usuario_filtro)
+    
+    if not pagos:
+        st.info("No hay pagos fijos registrados.")
+    else:
+        if "edit_id" not in st.session_state:
+            st.session_state.edit_id = None
 
-    # Confirmación de BORRADO
-    if st.session_state.get(f"borrando_pf_{p_id}", False):
-        st.markdown(f"""
-        <div style="background: #fff1f2; border: 2px solid #fb7185; border-radius: 18px; padding: 18px 22px; margin-top: -6px; margin-bottom: 16px;">
-            <div style="font-weight: 800; font-size: 1.1rem; color: #9f1239; margin-bottom: 6px;">
-                🗑️ ¿Confirmás que querés eliminar '{nombre}'?
-            </div>
-            <p style="color: #4c0519; margin-bottom: 12px; font-size: 0.95rem;">
-                Si ya no tenés este gasto fijo, se borrará y ya no te avisará en los próximos meses.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        for p in pagos:
+            p_id = p["id"]
+            
+            # Modo Edición
+            if st.session_state.edit_id == p_id:
+                with st.form(f"edit_pago_{p_id}"):
+                    e_concepto = st.text_input("Concepto", value=p["concepto"])
+                    e_monto = st.number_input("Monto ($)", min_value=0.0, value=float(p["monto"]))
+                    e_dia = st.number_input("Día", min_value=1, max_value=31, value=int(p["dia_vencimiento"]))
+                    
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.form_submit_button("💾 Guardar"):
+                            db.actualizar_pago_fijo(p_id, e_concepto, e_monto, e_dia)
+                            st.session_state.edit_id = None
+                            st.rerun()
+                    with c2:
+                        if st.form_submit_button("❌ Cancelar"):
+                            st.session_state.edit_id = None
+                            st.rerun()
+            else:
+                st.markdown(f"""
+                    <div class="card-box">
+                        <b style="font-size:1.1em;">{p['concepto']}</b> — ${p['monto']:,.2f}<br>
+                        <small>📆 Vence el día <b>{p['dia_vencimiento']}</b> | 👤 {p['usuario']}</small>
+                    </div>
+                """, unsafe_allow_kwargs=True)
+                
+                c_edit, c_del, _ = st.columns([1, 1, 2])
+                with c_edit:
+                    if st.button("✏️ Editar", key=f"btn_ed_{p_id}"):
+                        st.session_state.edit_id = p_id
+                        st.rerun()
+                with c_del:
+                    if st.button("🗑️ Eliminar", key=f"btn_del_{p_id}"):
+                        db.eliminar_pago_fijo(p_id)
+                        st.rerun()
 
-        col_b_si, col_b_no = st.columns(2)
-        with col_b_si:
-            if st.button("🗑️ Sí, eliminar definitivamente", key=f"btn_conf_del_{p_id}", type="primary", use_container_width=True):
-                db.delete_pago_fijo(p_id)
-                st.session_state[f"borrando_pf_{p_id}"] = False
-                st.success(f"¡Pago fijo '{nombre}' eliminado! 🌸")
-                st.rerun()
-        with col_b_no:
-            if st.button("✖️ Cancelar, mantenerlo", key=f"btn_canc_del_{p_id}", type="secondary", use_container_width=True):
-                st.session_state[f"borrando_pf_{p_id}"] = False
-                st.rerun()
-
-# Formulario para agregar otro pago fijo
-with st.expander("➕ ¿Querés agregar otro pago fijo para que te recuerde todos los meses?"):
-    st.markdown("Escribí acá si tenés otro gasto fijo que pagás todos los meses (por ejemplo: cuota de la escuela, gimnasio, gas):")
-    col_np1, col_np2, col_np3 = st.columns([3, 2, 2])
-    with col_np1:
-        nuevo_pf_nombre = st.text_input("Nombre del gasto fijo:", placeholder="Ej: Expensas del edificio, Escuela...")
-    with col_np2:
-        nuevo_pf_monto = st.number_input("Monto aproximado ($):", min_value=0.0, step=1000.0, format="%.2f", key="nuevo_pf_monto")
-    with col_np3:
-        nuevo_pf_cat = st.selectbox("Categoría:", options=cat.get_categories_list(), key="nuevo_pf_cat")
-
-    col_dia1, col_dia2 = st.columns(2)
-    with col_dia1:
-        dia_desde_val = st.number_input("¿Desde qué día del mes se puede pagar?", min_value=1, max_value=31, value=1)
-    with col_dia2:
-        dia_hasta_val = st.number_input("¿Hasta qué día del mes tenés tiempo de pagar? (Límite)", min_value=1, max_value=31, value=10)
-
-    if st.button("💾 Guardar este pago fijo para todos los meses", type="primary"):
-        if not nuevo_pf_nombre.strip() or nuevo_pf_monto <= 0:
-            st.error("Por favor completá el nombre y un monto mayor a cero.")
-        else:
-            ico = cat.get_category_icon(nuevo_pf_cat)
-            db.add_pago_fijo(nuevo_pf_nombre, nuevo_pf_monto, nuevo_pf_cat, ico, dia_desde_val, dia_hasta_val)
-            st.success(f"¡Listo! '{nuevo_pf_nombre}' te avisará todos los meses del {dia_desde_val} al {dia_hasta_val}. 🌸")
+# ==========================================
+# PESTAÑA 3: OPCIONES DE ADMINISTRADOR
+# ==========================================
+with tab_admin:
+    st.subheader("Opciones Avanzadas")
+    
+    if es_admin:
+        st.warning("⚠️ Zona de Mantenimiento (Solo Administrador)")
+        if st.button("🗑️ Borrar datos de prueba", type="primary"):
+            db.borrar_todos_los_datos()
+            st.success("¡Se eliminaron todos los gastos y pagos fijos registrados!")
             st.rerun()
-
-st.write("")
-
-# ----------------- PASO 4: ANOTAR UN GASTO EXTRA O DIARIO -----------------
-st.markdown("""
-<div class="paso-titulo">
-    <span class="paso-badge">4</span> Anotar otros gastos del día (supermercado, salidas, etc.)
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("**👉 Tocá uno de estos botones si fue alguno de estos gastos:**")
-col_b1, col_b2, col_b3, col_b4 = st.columns(4)
-
-if "descripcion_rapida" not in st.session_state:
-    st.session_state.descripcion_rapida = ""
-if "categoria_rapida" not in st.session_state:
-    st.session_state.categoria_rapida = None
-
-with col_b1:
-    if st.button("🛒 Super / Comida", use_container_width=True):
-        st.session_state.descripcion_rapida = "Supermercado y comida"
-        st.session_state.categoria_rapida = "🛒 Snacks, Kiosco & Comida"
-    if st.button("💊 Farmacia / Remedios", use_container_width=True):
-        st.session_state.descripcion_rapida = "Farmacia y medicamentos"
-        st.session_state.categoria_rapida = "💊 Salud, Cuidado & Farmacia"
-
-with col_b2:
-    if st.button("💡 Luz / Gas / Celular", use_container_width=True):
-        st.session_state.descripcion_rapida = "Factura de servicios o celular"
-        st.session_state.categoria_rapida = "📱 Celular & Conectividad"
-    if st.button("👕 Ropa / Zapatillas", use_container_width=True):
-        st.session_state.descripcion_rapida = "Ropa o calzado"
-        st.session_state.categoria_rapida = "👕 Ropa & Zapatillas"
-
-with col_b3:
-    if st.button("🏠 Casa / Hogar", use_container_width=True):
-        st.session_state.descripcion_rapida = "Gastos de la casa"
-        st.session_state.categoria_rapida = "🏠 Alquiler & Hogar"
-    if st.button("🎬 Salidas / Paseos", use_container_width=True):
-        st.session_state.descripcion_rapida = "Salida a comer o paseo"
-        st.session_state.categoria_rapida = "🎬 Ocio / Salidas & Juegos"
-
-with col_b4:
-    if st.button("🚌 SUBE / Nafta / Viaje", use_container_width=True):
-        st.session_state.descripcion_rapida = "Carga de SUBE o combustible"
-        st.session_state.categoria_rapida = "🚌 Transporte / SUBE"
-    if st.button("🐾 Comida de Mascota", use_container_width=True):
-        st.session_state.descripcion_rapida = "Alimento para la mascota"
-        st.session_state.categoria_rapida = "🐾 Mascotas"
-
-with st.container():
-    st.write("")
-    col_f1, col_f2, col_f3 = st.columns([3, 2, 2.5])
-    
-    with col_f1:
-        desc_input = st.text_input(
-            "1️⃣ ¿En qué gastaste?",
-            value=st.session_state.descripcion_rapida,
-            placeholder="Ejemplo: Compré verduras, helado, nafta...",
-            key="input_desc_simple"
-        )
-    
-    with col_f2:
-        monto_input = st.number_input(
-            "2️⃣ ¿Cuánta plata fue? ($)",
-            min_value=0.0,
-            step=500.0,
-            format="%.2f",
-            key="input_monto_simple"
-        )
-
-    lista_cats = cat.get_categories_list()
-    cat_detectada = cat.detect_category_from_text(desc_input)
-    
-    idx_cat = 0
-    if st.session_state.categoria_rapida and st.session_state.categoria_rapida in lista_cats:
-        idx_cat = lista_cats.index(st.session_state.categoria_rapida)
-    elif desc_input and cat_detectada in lista_cats:
-        idx_cat = lista_cats.index(cat_detectada)
-
-    with col_f3:
-        cat_elegida = st.selectbox(
-            "3️⃣ Categoría (se elige sola)",
-            options=lista_cats,
-            index=idx_cat,
-            key="input_cat_simple"
-        )
-
-    st.write("")
-    btn_guardar_gasto = st.button("✨ ¡LISTO! GUARDAR ESTE GASTO ✨", type="primary", use_container_width=True)
-
-    if btn_guardar_gasto:
-        if not desc_input.strip():
-            st.error("⚠️ Por favor escribe en qué gastaste.")
-        elif monto_input <= 0:
-            st.error("⚠️ Por favor escribe cuánta plata fue (un número mayor a cero).")
-        else:
-            icono = cat.get_category_icon(cat_elegida)
-            db.add_expense(
-                fecha=hoy.strftime("%Y-%m-%d"),
-                descripcion=desc_input.strip(),
-                categoria=cat_elegida,
-                icono=icono,
-                monto=monto_input
-            )
-            st.session_state.descripcion_rapida = ""
-            st.session_state.categoria_rapida = None
-            st.success(f"🎉 ¡Gasto guardado con éxito! Anotaste **{desc_input.strip()}** por **{fmt_pesos(monto_input)}**.")
-            st.rerun()
-
-st.write("")
-
-# ----------------- PASO 5: ¿EN QUÉ SE FUE LA PLATA? -----------------
-st.markdown("""
-<div class="paso-titulo">
-    <span class="paso-badge">5</span> ¿En qué gastaste más este mes?
-</div>
-""", unsafe_allow_html=True)
-
-if df_gastos.empty:
-    st.info("👋 Todavía no anotaste ningún gasto este mes. ¡Anotá el primero arriba para ver los gráficos!")
-else:
-    df_cat = df_gastos.groupby(["categoria", "icono"])["monto"].sum().reset_index()
-    df_cat = df_cat.sort_values(by="monto", ascending=False)
-    df_cat["porcentaje"] = (df_cat["monto"] / df_cat["monto"].sum()) * 100.0
-    df_cat["color"] = df_cat["categoria"].apply(cat.get_category_color)
-
-    col_g1, col_g2 = st.columns([1.2, 1])
-
-    with col_g1:
-        fig_pie = px.pie(
-            df_cat,
-            names="categoria",
-            values="monto",
-            hole=0.42,
-            color="categoria",
-            color_discrete_map={row["categoria"]: row["color"] for _, row in df_cat.iterrows()}
-        )
-        fig_pie.update_traces(
-            textposition='inside',
-            textinfo='percent+label',
-            hovertemplate='<b>%{label}</b><br>Monto: $%{value:,.2f}<br>Porcentaje: %{percent}<extra></extra>',
-            marker=dict(line=dict(color='#ffffff', width=2))
-        )
-        fig_pie.update_layout(
-            showlegend=False,
-            margin=dict(t=10, b=10, l=10, r=10),
-            height=340,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-    with col_g2:
-        st.markdown("##### 👛 La lista de lo que más gastaste:")
-        for _, row in df_cat.iterrows():
-            st.markdown(f"""
-            <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; border-radius: 12px; padding: 10px 16px; margin-bottom: 8px; border-left: 6px solid {row['color']}; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
-                <span style="font-size: 1.05rem;">{row['icono']} <strong>{row['categoria']}</strong></span>
-                <span style="font-size: 1.05rem;"><strong>{fmt_pesos(row['monto'])}</strong> <small style="color: #be123c;">({row['porcentaje']:.0f}%)</small></span>
-            </div>
-            """, unsafe_allow_html=True)
-
-st.write("")
-
-# ----------------- PASO 6: LA LISTA COMPLETA Y BORRADO FÁCIL -----------------
-st.markdown("""
-<div class="paso-titulo">
-    <span class="paso-badge">6</span> Todos los gastos que anotaste
-</div>
-""", unsafe_allow_html=True)
-
-if not df_gastos.empty:
-    df_mostrar = df_gastos[["fecha", "icono", "descripcion", "categoria", "monto"]].copy()
-    df_mostrar.columns = ["Fecha", "Ícono", "En qué gastaste", "Categoría", "Monto"]
-    df_mostrar["Monto"] = df_mostrar["Monto"].map(lambda x: fmt_pesos(x))
-    
-    st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
-
-    col_excel, col_csv, col_del = st.columns([1.6, 1.1, 1.3])
-    with col_excel:
-        excel_bytes = eg.generar_excel_control(mes=hoy.month, anio=anio_actual, sueldo=sueldo_guardado)
-        st.download_button(
-            label="📊 Descargar Control en Excel (.xlsx)",
-            data=excel_bytes,
-            file_name=f"Control_Gastos_{mes_nombre_actual}_{anio_actual}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary",
-            use_container_width=True
-        )
-    with col_csv:
-        csv_bytes = df_gastos[["fecha", "descripcion", "categoria", "monto"]].to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Lista simple (CSV)",
-            data=csv_bytes,
-            file_name=f"mis_cuentas_{mes_nombre_actual}_{anio_actual}.csv",
-            mime="text/csv",
-            type="secondary",
-            use_container_width=True
-        )
-    with col_del:
-        with st.expander("❌ ¿Te equivocaste al anotar algo?"):
-            opciones_para_borrar = {
-                f"{row['fecha']} - {row['icono']} {row['descripcion']} ({fmt_pesos(row['monto'])})": row['id']
-                for _, row in df_gastos.iterrows()
-            }
-            elegido = st.selectbox("Elegí el gasto que querés borrar:", options=list(opciones_para_borrar.keys()))
-            if st.button("🗑️ Sí, borrar este gasto", type="secondary", use_container_width=True):
-                id_borrar = opciones_para_borrar[elegido]
-                db.delete_expense(id_borrar)
-                st.success("¡Gasto borrado con éxito!")
-                st.rerun()
-
-    st.markdown("""
-    <div style="background: #ffffff; border: 1.5px solid #fbcfe8; border-radius: 14px; padding: 12px 18px; margin-top: 14px; font-size: 0.92rem; color: #475569;">
-        ✨ <strong>¿Qué incluye tu archivo de Excel (.xlsx)?</strong>
-        <ul style="margin: 6px 0 0 0; padding-left: 20px;">
-            <li><strong>📊 Panel de Control:</strong> Tarjetas visuales de Dinero Inicial, Gastos Totales y Saldo Restante vinculadas con fórmulas automáticas.</li>
-            <li><strong>📈 Distribución por Categoría & Gráfico Nativo:</strong> Tabla resumen con porcentajes calculados automáticamente y gráfico circular de torta incorporado.</li>
-            <li><strong>📝 Detalle de Gastos & Pagos Fijos:</strong> Pestañas dedicadas con filtros interactivos de Excel y semáforo visual de vencimientos.</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.caption("Aún no hay gastos registrados este mes.")
-    excel_bytes = eg.generar_excel_control(mes=hoy.month, anio=anio_actual, sueldo=sueldo_guardado)
-    st.download_button(
-        label="📊 Descargar Plantilla de Control en Excel (.xlsx)",
-        data=excel_bytes,
-        file_name=f"Control_Gastos_{mes_nombre_actual}_{anio_actual}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        type="secondary"
-    )
+    else:
+        st.info("🔒 Necesitas ingresar el PIN de Administrador (5861) en la barra lateral para acceder a esta sección.")
