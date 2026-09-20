@@ -661,16 +661,36 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
         "Alcancía ($)": fmt_moneda(udata.get("alcancia", 0.0)),
     })
   st.dataframe(pd.DataFrame(resumen_admin), use_container_width=True)
+st.divider()
+    st.subheader("Crear un Nuevo Usuario")
+    nu = st.text_input("Nuevo Usuario")
+    np = st.text_input("Contraseña", type="password")
+    if st.button("Crear Usuario"):
+        if nu and np:
+            if nu not in usuarios:
+                # 1. Guardar credenciales
+                usuarios[nu] = np
+                guardar_json(USERS_FILE, usuarios)
 
-  st.divider()
-  st.subheader("Crear un Nuevo Usuario")
-  nu = st.text_input("Nuevo Usuario")
-  np = st.text_input("Contraseña", type="password")
-  if st.button("Crear Usuario"):
-    if nu and np:
-      usuarios[nu] = np
-      guardar_json(USERS_FILE, usuarios)
-      st.success(f"Usuario '{nu}' creado exitosamente.")
-      st.rerun()
-    else:
-      st.warning("Completa usuario y contraseña.")
+                # 2. Inicializar su estructura financiera en db_data para que aparezca en la tabla
+                if nu not in db_data:
+                    db_data[nu] = {
+                        "ingreso_inicial": 0.0,
+                        "alcancia": 0.0,
+                        "meta_alcancia": 0.0,
+                        "nombre_meta": "Ahorro General",
+                        "usar_presupuestos": False,
+                        "presupuestos_cat": {},
+                        "pagos_fijos": [],
+                        "gastos_diarios": [],
+                    }
+                    guardar_json(DATA_FILE, db_data)
+
+                st.success(
+                    f"Usuario '{nu}' creado exitosamente con su estructura financiera."
+                )
+                st.rerun()
+            else:
+                st.warning("El usuario ya existe.")
+        else:
+            st.warning("Completa usuario y contraseña.")
