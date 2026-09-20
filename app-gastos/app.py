@@ -1,33 +1,26 @@
 import streamlit as st
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import requests
 import pandas as pd
 
-# Función para conectar a Google Sheets usando los secretos de Streamlit
-@st.cache_resource
-def conectar_db():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    
-    # Esto leerá las credenciales desde la configuración de Streamlit Cloud
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
-    
-    # Abre la planilla usando el link que me pasaste
-    sheet_url = "https://docs.google.com/spreadsheets/d/1vHTsp8RlJRzgMdPL2bYHIT0skQ_orYyYubCjbPVyHq4/edit?usp=sharing"
-    return client.open_by_url(sheet_url)
+# Tu URL del puente de Google Apps Script
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwkfC-KJ6QEhSeIMD784VT4fYjcNRzkIcYTpMM2pZIuiE3qmcX_43D3SHYT4xTBt3Xe/exec"
 
-# Conectamos a la base de datos
-db = conectar_db()
+def cargar_datos(sheet_name):
+    payload = {"action": "read", "sheet": sheet_name}
+    response = requests.post(WEB_APP_URL, json=payload)
+    rows = response.json()
+    if len(rows) > 1:
+        return pd.DataFrame(rows[1:], columns=rows[0])
+    return pd.DataFrame()
 
-# Para leer la pestaña de usuarios
+def guardar_fila(sheet_name, fila_datos):
+    payload = {"action": "append", "sheet": sheet_name, "row": fila_datos}
+    response = requests.post(WEB_APP_URL, json=payload)
+    return response.json()
+
+# Funciones listas para usar en tu app
 def cargar_usuarios():
-    ws = db.worksheet("usuarios")
-    data = ws.get_all_records()
-    return pd.DataFrame(data)
+    return cargar_datos("usuarios")
 
-# Para leer la pestaña de finanzas/gastos
 def cargar_finanzas():
-    ws = db.worksheet("finanzas")
-    data = ws.get_all_records()
-    return pd.DataFrame(data)
+    return cargar_datos("finanzas")
