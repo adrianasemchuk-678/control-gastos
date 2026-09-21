@@ -595,13 +595,29 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
 
     st.subheader("Tabla Resumen de Todos los Usuarios")
     resumen_admin = []
-    for u, udata in db_data.items():
+    
+    # Recorremos tanto el archivo de usuarios como la base de datos de finanzas
+    for u in usuarios.keys():
+        if u not in db_data:
+            db_data[u] = {
+                "ingreso_inicial": 0.0,
+                "alcancia": 0.0,
+                "meta_alcancia": 0.0,
+                "nombre_meta": "Ahorro General",
+                "usar_presupuestos": False,
+                "presupuestos_cat": {},
+                "pagos_fijos": [],
+                "gastos_diarios": [],
+            }
+            
+        udata = db_data[u]
         tot_f = sum(
             pf["monto"] for pf in udata.get("pagos_fijos", []) if pf["pagado"]
         )
         tot_g = sum(g["monto"] for g in udata.get("gastos_diarios", []))
         tot = tot_f + tot_g
         ing = udata.get("ingreso_inicial", 0.0)
+        
         resumen_admin.append({
             "Usuario": u.capitalize(),
             "Ingreso ($)": fmt_moneda(ing),
@@ -609,6 +625,8 @@ elif opcion == "👥 Gestión de Usuarios" and es_admin:
             "Saldo Restante": fmt_moneda(ing - tot),
             "Alcancía ($)": fmt_moneda(udata.get("alcancia", 0.0)),
         })
+        
+    guardar_json(DATA_FILE, db_data)
     st.dataframe(pd.DataFrame(resumen_admin), use_container_width=True)
     st.divider()
     
