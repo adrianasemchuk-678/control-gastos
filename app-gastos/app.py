@@ -76,7 +76,8 @@ def cargar_json(filepath, default):
         return default
     try:
         with open(filepath, "r", encoding="utf-8") as f:
-            return json.load(f)
+            contenido = json.load(f)
+            return contenido if isinstance(contenido, type(default)) else default
     except Exception:
         return default
 
@@ -94,7 +95,6 @@ if "usuario_actual" not in st.session_state:
     st.session_state["usuario_actual"] = None
 
 if st.session_state["usuario_actual"] is None:
-    # Insignia en pantalla de inicio de sesión
     st.markdown(
         """
         <div class="brand-header">
@@ -146,18 +146,8 @@ usr_data.setdefault("presupuestos_cat", {})
 
 # HELPER DE FECHAS Y FORMATOS
 MESES = [
-    "Enero",
-    "Febrero",
-    "Marzo",
-    "Abril",
-    "Mayo",
-    "Junio",
-    "Julio",
-    "Agosto",
-    "Septiembre",
-    "Octubre",
-    "Noviembre",
-    "Diciembre",
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ]
 hoy = datetime.now()
 nombre_mes_actual = f"{MESES[hoy.month - 1]} {hoy.year}"
@@ -198,26 +188,11 @@ if st.sidebar.button("Cerrar Sesión"):
     st.rerun()
 
 EMOJIS_KEYWORDS = {
-    "maquillaje": "💄",
-    "skincare": "🧴",
-    "crema": "🧴",
-    "cosmetico": "💄",
-    "comida": "🍔",
-    "almuerzo": "🍲",
-    "cena": "🍕",
-    "super": "🛒",
-    "supermercado": "🛒",
-    "nafta": "⛽",
-    "auto": "🚗",
-    "remis": "🚖",
-    "uber": "🚖",
-    "gimnasio": "🏋️‍♀️",
-    "gym": "🏋️‍♀️",
-    "padel": "🎾",
-    "ropa": "👗",
-    "zapatillas": "👟",
-    "farmacia": "💊",
-    "regalo": "🎁",
+    "maquillaje": "💄", "skincare": "🧴", "crema": "🧴", "cosmetico": "💄",
+    "comida": "🍔", "almuerzo": "🍲", "cena": "🍕", "super": "🛒",
+    "supermercado": "🛒", "nafta": "⛽", "auto": "🚗", "remis": "🚖",
+    "uber": "🚖", "gimnasio": "🏋️‍♀️", "gym": "🏋️‍♀️", "padel": "🎾",
+    "ropa": "👗", "zapatillas": "👟", "farmacia": "💊", "regalo": "🎁",
 }
 
 
@@ -292,13 +267,11 @@ if opcion == "💰 Mi Presupuesto & Panel":
                 gastado = gastado_cat.get(cat, 0.0)
                 if gastado >= limite:
                     st.error(
-                        f"⚠️ **Superaste el límite en {cat}**: Gastaste"
-                        f" {fmt_moneda(gastado)} (Límite: {fmt_moneda(limite)})"
+                        f"⚠️ **Superaste el límite en {cat}**: Gastaste {fmt_moneda(gastado)} (Límite: {fmt_moneda(limite)})"
                     )
                 elif gastado >= limite * 0.8:
                     st.warning(
-                        f"⚡ **Cerca del límite en {cat}**: Gastaste {fmt_moneda(gastado)}"
-                        f" de {fmt_moneda(limite)}"
+                        f"⚡ **Cerca del límite en {cat}**: Gastaste {fmt_moneda(gastado)} de {fmt_moneda(limite)}"
                     )
 
     st.divider()
@@ -311,9 +284,7 @@ if opcion == "💰 Mi Presupuesto & Panel":
         for pf in usr_data["pagos_fijos"]:
             pf["pagado"] = False
         guardar_json(DATA_FILE, db_data)
-        st.success(
-            "¡Mes cerrado! Sobrante guardado en la alcancía y registros limpios."
-        )
+        st.success("¡Mes cerrado! Sobrante guardado en la alcancía y registros limpios.")
         st.rerun()
 
     if col_reset2.button("🗑️ Borrar Gastos Diarios sin alterar Alcancía"):
@@ -355,9 +326,7 @@ elif opcion == "📌 Pagos Fijos":
 
             label_estado = "✅ Pagado" if pf["pagado"] else "💳 Marcar Pagado"
             if col_d.button(label_estado, key=f"pay_{idx}"):
-                usr_data["pagos_fijos"][idx]["pagado"] = not usr_data["pagos_fijos"][idx][
-                    "pagado"
-                ]
+                usr_data["pagos_fijos"][idx]["pagado"] = not usr_data["pagos_fijos"][idx]["pagado"]
                 guardar_json(DATA_FILE, db_data)
                 st.rerun()
 
@@ -377,13 +346,7 @@ elif opcion == "🛒 Gastos Diarios":
 
         cat_select = st.selectbox(
             "Categoría",
-            [
-                "Supermercado",
-                "Servicios",
-                "Transporte",
-                "Salud / Estética",
-                "Otros",
-            ],
+            ["Supermercado", "Servicios", "Transporte", "Salud / Estética", "Otros"],
         )
         detalle = st.text_input("Detalle corto (ej. Maquillaje, Regalo)")
 
@@ -446,11 +409,8 @@ elif opcion == "⚙️ Mis Preferencias":
     if usar_p:
         st.info("Ingresa los límites máximos que no deseas superar este mes.")
         cats_def = [
-            "🛒 Supermercado",
-            "💡 Servicios",
-            "🚌 Transporte",
-            "💊 Salud / Estética",
-            "📦 Otros",
+            "🛒 Supermercado", "💡 Servicios", "🚌 Transporte",
+            "💊 Salud / Estética", "📦 Otros",
         ]
         for c in cats_def:
             val_actual = float(usr_data["presupuestos_cat"].get(c, 0.0))
@@ -549,13 +509,9 @@ elif opcion == "📊 Reportes & Exportaciones":
             )
 
             elements.append(
-                Paragraph(
-                    f"🌸 Reporte de Gastos AS — {nombre_mes_actual}", title_style
-                )
+                Paragraph(f"🌸 Reporte de Gastos AS — {nombre_mes_actual}", title_style)
             )
-            elements.append(
-                Paragraph("Diseñado por Adriana Semchuk", styles["Normal"])
-            )
+            elements.append(Paragraph("Diseñado por Adriana Semchuk", styles["Normal"]))
             elements.append(Spacer(1, 8))
 
             data_res = [
@@ -602,6 +558,7 @@ elif opcion == "📊 Reportes & Exportaciones":
 
             doc.build(elements)
             buffer.seek(0)
+            plt.close(fig) # Limpieza para evitar fugas de memoria en Matplotlib
             return buffer
 
         col_d1, col_d2 = st.columns(2)
@@ -610,10 +567,7 @@ elif opcion == "📊 Reportes & Exportaciones":
         col_d1.download_button(
             label="📄 Descargar PDF (1 Hoja)",
             data=pdf_data,
-            file_name=(
-                "Reporte_Gastos_AS_"
-                f"{nombre_mes_actual.replace(' ', '_')}.pdf"
-            ),
+            file_name=f"Reporte_Gastos_AS_{nombre_mes_actual.replace(' ', '_')}.pdf",
             mime="application/pdf",
         )
 
@@ -629,13 +583,8 @@ elif opcion == "📊 Reportes & Exportaciones":
         col_d2.download_button(
             label="📊 Descargar Excel",
             data=excel_buf,
-            file_name=(
-                "Reporte_Gastos_AS_"
-                f"{nombre_mes_actual.replace(' ', '_')}.xlsx"
-            ),
-            mime=(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ),
+            file_name=f"Reporte_Gastos_AS_{nombre_mes_actual.replace(' ', '_')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
     else:
         st.info("No hay información suficiente registrada este mes para exportar.")
