@@ -94,5 +94,15 @@
                 "monto": 50000.0
             }
         ]
+    },
+    "Sofia": {
+        "ingreso_inicial": 100000.0,
+        "alcancia": 0.0,
+        "meta_alcancia": 0.0,
+        "nombre_meta": "Ahorro General",
+        "usar_presupuestos": false,
+        "presupuestos_cat": {},
+        "pagos_fijos": [],
+        "gastos_diarios": []
     }
 }
