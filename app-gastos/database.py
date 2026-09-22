@@ -1,121 +1,44 @@
 import streamlit as st
 import gspread
+from google.oauth2.service_account import Credentials
+import pandas as pd
 
+# Configurar la conexión con Google Sheets usando gspread y st.secrets
+@st.cache_resource
 def conectar_gsheets():
-    # Conexión usando los secretos configurados en Streamlit Cloud
-    credenciales = dict(st.secrets["gspread"])
-    gc = gspread.service_account_from_dict(credenciales)
-    sh = gc.open("db_gastos")
-    return sh
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    # Cargamos credenciales desde los secrets de Streamlit
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+    client = gspread.authorize(creds)
+    return client
 
-def obtener_usuarios():
-    try:
-        sh = conectar_gsheets()
-        worksheet = sh.worksheet("usuarios")
-        data = worksheet.get_all_records()
-        # Extrae la columna 'usuario' de la planilla
-        return [str(row.get("usuario")) for row in data if row.get("usuario")]
-    except Exception:
-        return ["Admin", "Mica"]
+# Función para obtener datos de una hoja específica (ej. "usuarios" o "gastos")
+def cargar_datos_sheet(nombre_hoja):
+    client = conectar_gsheets()
+    # Reemplaza 'db_gastos' con el nombre exacto de tu planilla en Google Drive
+    sheet = client.open("db_gastos").worksheet(nombre_hoja)
+    data = sheet.get_all_records()
+    return pd.DataFrame(data)
 
-def agregar_usuario(nombre, password="123"):
-    nombre_limpio = nombre.strip()
-    if not nombre_limpio:
-        return
-    sh = conectar_gsheets()
-    worksheet = sh.worksheet("usuarios")
-    usuarios_actuales = obtener_usuarios()
-    if nombre_limpio not in usuarios_actuales:
-        worksheet.append_row([nombre_limpio, str(password)])
+# Función para guardar/agregar datos a la hoja
+def guardar_datos_sheet(nombre_hoja, df):
+    client = conectar_gsheets()
+    sheet = client.open("db_gastos").worksheet(nombre_hoja)
+    # Limpiamos y reescribimos o añadimos según tu lógica
+    sheet.clear()
+    sheet.update([df.columns.values.tolist()] + df.values.tolist())
 
-def obtener_gastos(usuario_filtro=None):
-    try:
-        sh = conectar_gsheets()
-        worksheet = sh.worksheet("finanzas")
-        data = worksheet.get_all_records()
-        if usuario_filtro and usuario_filtro != "Todos":
-            data = [row for row in data if row.get("usuario") == usuario_filtro]
-        return data
-    except Exception:
-        return []
+# Ejemplo de uso dentro de tu app:
+st.title("Control de Gastos con Google Sheets 🚀")
 
-def registrar_gasto(fecha, concepto, monto, categoria, usuario):
-    sh = conectar_gsheets()
-    worksheet = sh.worksheet("finanzas")
-    worksheet.append_row([str(fecha), concepto, float(monto), categoria, usuario])
-
-def obtener_pagos_fijos(usuario_filtro=None):
-    return []
-
-def agregar_pago_fijo(concepto, monto, dia_vencimiento, usuario):
-    pass
-
-def actualizar_pago_fijo(id_pago, concepto, monto, dia_vencimiento):
-    pass
-
-def eliminar_pago_fijo(id_pago):
-    pass
-
-def borrar_todos_los_datos():
-    pass
-import streamlit as st
-import gspread
-
-def conectar_gsheets():
-    credenciales = dict(st.secrets["gspread"])
-    gc = gspread.service_account_from_dict(credenciales)
-    sh = gc.open("db_gastos")
-    return sh
-
-def obtener_usuarios():
-    try:
-        sh = conectar_gsheets()
-        worksheet = sh.worksheet("usuarios")
-        return worksheet.get_all_records()
-    except Exception:
-        return []
-
-def agregar_usuario(nombre, password="123"):
-    nombre_limpio = str(nombre).strip()
-    if not nombre_limpio:
-        return False
-    sh = conectar_gsheets()
-    worksheet = sh.worksheet("usuarios")
-    registros = worksheet.get_all_records()
-    nombres_existentes = [str(r.get("usuario", "")).strip().lower() for r in registros]
-    
-    if nombre_limpio.lower() not in nombres_existentes:
-        worksheet.append_row([nombre_limpio, str(password)])
-        return True
-    return False
-
-def obtener_gastos(usuario_filtro=None):
-    try:
-        sh = conectar_gsheets()
-        worksheet = sh.worksheet("finanzas")
-        data = worksheet.get_all_records()
-        if usuario_filtro and usuario_filtro != "Todos":
-            data = [row for row in data if str(row.get("usuario", "")).strip().lower() == str(usuario_filtro).strip().lower()]
-        return data
-    except Exception:
-        return []
-
-def registrar_gasto(fecha, concepto, monto, categoria, usuario):
-    sh = conectar_gsheets()
-    worksheet = sh.worksheet("finanzas")
-    worksheet.append_row([str(fecha), concepto, float(monto), categoria, usuario])
-
-def obtener_pagos_fijos(usuario_filtro=None):
-    return []
-
-def agregar_pago_fijo(concepto, monto, dia_vencimiento, usuario):
-    pass
-
-def actualizar_pago_fijo(id_pago, concepto, monto, dia_vencimiento):
-    pass
-
-def eliminar_pago_fijo(id_pago):
-    pass
-
-def borrar_todos_los_datos():
-    pass
+# Cargar usuarios o finanzas directamente de la nube
+try:
+    df_finance = cargar_datos_sheet("finance_data")
+    st.write("Datos financieros cargados desde Google Sheets:")
+    st.dataframe(df_finance)
+except Exception as e:
+    st.error(f"Error al conectar con Google Sheets: {e}")
